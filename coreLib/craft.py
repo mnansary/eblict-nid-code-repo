@@ -82,5 +82,6 @@ def auto_correct_image_orientation(image,prediction_result):
     else:
         angle=int(median_low(angles))
         image=rotate_image(image,angle)
-        return image
+        mask=rotate_image(mask,angle)
+        return image,mask
          

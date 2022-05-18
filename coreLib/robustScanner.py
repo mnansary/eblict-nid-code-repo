@@ -277,7 +277,7 @@ class RobustScanner(object):
             texts.append("".join([self.vocab[l] for l in _label]))
         return texts
 
-    def recognize(self,crops,batch_size=32,infer_len=10):
+    def __call__(self,crops,batch_size=32,infer_len=10):
         '''
             final wrapper
         '''
