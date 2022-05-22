@@ -1,0 +1,75 @@
+  
+{% extends "base.html" %} {% block content %}
+
+<h2>EBLICT NID OCR</h2>
+
+<div>
+    <form id="upload-file" method="post" enctype="multipart/form-data">
+        <label for="imageUpload" class="upload-label">
+            UPLOAD IMAGE
+        </label>
+        <input type="file" name="file" id="imageUpload" accept=".png, .jpg, .jpeg">
+        
+        <fieldset id="face">
+            <legend>Select Face</legend>
+        
+            <div>
+              <input type="radio" id="front" name="face" value="front"
+                     checked>
+              <label for="front">Front</label>
+            </div>
+        
+            <div>
+              <input type="radio" id="back" name="face" value="back">
+              <label for="back">back</label>
+            </div>
+        
+        </fieldset>
+    
+        <fieldset id="info">
+            <legend>Info</legend>
+            
+            <div>
+              <input type="checkbox" id="bangla" name="bangla">
+              <label for="bangla">Bangla</label>
+            </div>
+            <div>
+                <input type="checkbox" id="photo" name="photo">
+                <label for="photo">photo</label>
+            </div>
+            <div>
+                <input type="checkbox" id="sign" name="sign">
+                <label for="sign">sign</label>
+            </div>
+        </fieldset>
+        
+        <fieldset id="exec">
+            <legend>Execution</legend>
+            <div>
+              <input type="checkbox" id="checkrotation" name="checkrotation"
+                     checked>
+              <label for="checkrotation">Check Rotation</label>
+            </div>
+        </fieldset>
+    </form>
+
+    <div class="image-section" style="display:none;">
+        <div class="img-preview">
+            <div id="imagePreview">
+            </div>
+        </div>
+        <div>
+            <button type="button" class="btn btn-primary btn-lg " id="btn-predict">Predict!</button>
+        </div>
+    </div>
+
+    
+    <div class="loader" style="display:none;"></div>
+
+    <h3 id="result">
+        <span> </span>
+    </h3>
+
+</div>
+
+{% endblock %}

@@ -8,19 +8,19 @@ from tkinter.messagebox import NO
 #-------------------------
 # imports
 #-------------------------
-from .recs import EngOCR
+from .recs import EngOCR#,BanOCR,Modifier
 from .yolo import YOLO
 from .dbnet import Detector
 from .utils import localize_box,LOG_INFO
 from .craft import auto_correct_image_orientation
-from .robustScanner import RobustScanner
+#from .robustScanner import RobustScanner
 from craft_text_detector import (
     load_craftnet_model,
     load_refinenet_model,
     get_prediction,
     read_image,
 )
-
+from .checks import processNID,processDob
 import os
 import cv2
 import numpy as np
@@ -28,7 +28,7 @@ import matplotlib.pyplot as plt
 import copy
 import pandas as pd
 import tensorflow as tf
-
+from time import time
 #-------------------------
 # class
 #------------------------
@@ -38,7 +38,7 @@ if any(gpu_devices):
     
 class OCR(object):
     def __init__(self,weights_dir):
-        self.loc=YOLO(os.path.join(weights_dir,"yolo/yolo-t.onnx"),labels=['sign', 'bname', 'ename', 'fname', 'mname', 'dob', 'nid', 'front', 'addr', 'back'])
+        self.loc=YOLO(os.path.join(weights_dir,"yolo/yolo.onnx"),labels=['sign', 'bname', 'ename', 'fname', 'mname', 'dob', 'nid', 'front', 'addr', 'back'])
         LOG_INFO("Loaded YOLO")
         self.det = Detector("db_resnet50")
         LOG_INFO("Loaded DBNET")
@@ -47,8 +47,6 @@ class OCR(object):
         LOG_INFO("Loaded CRAFT")
         self.engocr    = EngOCR()
         LOG_INFO("Loaded EngOCR")
-        self.banocr    = RobustScanner("weights/")
-        LOG_INFO("Loaded Robust Scanner")
         
     def get_oriented_data(self,img):
         # read image
@@ -113,7 +111,8 @@ class OCR(object):
         return crop           
         
 
-    def process_front(self,boxes,locs,crops,debug):
+    def process_front(self,boxes,locs,crops,debug,result):
+        st=time()
         # sorted box dictionary
         box_dict=self.process_boxes(boxes,locs,["sign","front","back","addr"])
     
@@ -131,84 +130,93 @@ class OCR(object):
         idx_crops=[crops[i] for i in idx]
         
         en_crops=en_name_crops+dob_crops+idx_crops
-        result = self.engocr(en_crops)
+        res_eng = self.engocr(en_crops)
 
         ## text fitering
-        en_text=[i for i,_ in result]# no conf
+        en_text=[i for i,_ in res_eng]# no conf
         en_name=" ".join(en_text[:len(en_name_crops)])
         en_text=en_text[len(en_name_crops):]
         dob="".join(en_text[:len(dob_crops)])
         en_text=en_text[len(dob_crops):]
         idx="".join(en_text)
 
-        result={}
-        result["ename"]=en_name
-        result["nid"]=idx
-        result["dob"]=dob
-
-
-        # bangla
-        bn_keys=["bname","fname","mname"]
-        ## bn-name
-        bn_name=box_dict[bn_keys[0]]
-        bn_name_crops=[crops[i] for i in bn_name]
-        ## fname
-        fname    =box_dict[bn_keys[1]]
-        fname_crops=[crops[i] for i in fname]
-        ## mname
-        mname    = box_dict[bn_keys[2]]
-        mname_crops=[crops[i] for i in mname]
         
-        bn_crops=bn_name_crops+fname_crops+mname_crops
-        
-        bn_texts=self.banocr(bn_crops)
-        ## text fitering
-        bn_name=" ".join(bn_texts[:len(bn_name_crops)])
-        bn_texts=bn_texts[len(bn_name_crops):]
-        fname=" ".join(bn_texts[:len(fname_crops)])
-        bn_texts=bn_texts[len(fname_crops):]
-        mname=" ".join(bn_texts)
+        result["English name"]=en_name
+        result["NID"]=processNID(idx) 
+        result["DOB"]=processDob(dob) 
 
-        result["name"]=bn_name
-        result["fname"]=fname
-        result["mname"]=mname
-    
+        if result["NID"] is None:
+            result["NID"]="NID Number not found"
+                
+        if result["DOB"] is None:
+            result["DOB"]="Date of birth not found"
+        
+        if debug:
+            print("EngOCR batch time:",st-time())
 
         return result 
     
 
             
-    def __call__(self,img_path,face,debug=False):
+    def __call__(self,
+                img_path,
+                face,
+                get_bangla=False,
+                exec_rot=True,
+                ret_photo=False,
+                ret_sign=False,
+                debug=False):
+        
+        result={}
+        #------------------------------tempv1---------------------------------
+        if face=="back":
+            if ret_photo:
+                result["photo"]="NID back has no photo available!!!"
+            if ret_sign:
+                result["sign"]="NID back has no sign available!!!"
+            result["address"]="Not implemented yet"
+            return result
+        
+        if get_bangla:
+            result["Bangla name"]="Not implemented yet"
+            result["Fathers name"]="Not implemented yet"
+            result["Mothers name"]="Not implemented yet"
+        #------------------------------tempv1---------------------------------        
         try:
             img=cv2.imread(img_path)
             img=cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
         except Exception as e:
             print("probelem reading image:",img_path)
-            return None
+            result["error"]="probelem reading image:"
+            return result
 
         if face=="front":
-            clss=['sign', 'bname', 'ename', 'fname', 'mname', 'dob', 'nid', 'front']
+            clss=['bname', 'ename', 'fname', 'mname', 'dob', 'nid']
         else:
-            clss=['addr', 'back']
+            clss=['addr']
         if debug:
             plt.imshow(img)
             plt.show()
-        img=self.get_oriented_data(img)
-        if debug:
-            plt.imshow(img)
-            plt.show()
+        
+        # orientation
+        if exec_rot:
+            img=self.get_oriented_data(img)
         
         # check yolo
         img,locs=self.loc(img,clss)
+        
         if img is not None:
+            if debug:
+                plt.imshow(img)
+                plt.show()
+            
             # text detection
             boxes,crops=self.det.detect(img,img,debug=debug)
             if face=="front":
-                result=self.process_front(boxes,locs,crops,debug)
-                print(result)
-            
-        
+                result=self.process_front(boxes,locs,crops,debug,result)
+                return result
         else:
-            print(img_path)
+            result["error"]="Data Fields not located.Please Take new image"
+            return result
         
         

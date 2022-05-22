@@ -100,14 +100,12 @@ def shadow_func(image):
     img=remove_shadows(img)
     return img
 
-def sharp_func(image):
+def sharp_func(img):
     kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
-    img=resize_func(image)
     img = cv2.filter2D(img, -1, kernel)
     return img
 
-def enhance_func(image,enf=2):
-    img=resize_func(image)
+def enhance_func(img,enf=2):
     img=Image.fromarray(img)
     img= ImageEnhance.Color(img)
     img=img.enhance(enf)
