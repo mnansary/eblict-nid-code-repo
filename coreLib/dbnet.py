@@ -185,7 +185,7 @@ class Detector(object):
         return dst_img
         
     
-    def detect(self,img,ref,debug=False,thresh=0.5):
+    def detect(self,img,ref,debug=False,thresh=0.4):
         '''
             extract locations and crops
         '''

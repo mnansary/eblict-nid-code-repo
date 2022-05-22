@@ -50,9 +50,9 @@ class TessModOCR(object):
         self.img_height = img_height
         self.img_width  = img_width
         self.modifier= sm.Unet(backbone,input_shape=( img_height , img_width,3), classes=3,encoder_weights=None)
-        self.modifier.load_weights(model_path)
-        self.normalizer= sm.Unet(backbone,input_shape=( img_height , img_width,3), classes=3,encoder_weights=None)
-        self.normalizer.load_weights(model_path)
+        self.modifier.load_weights(mod_path)
+        # self.normalizer= sm.Unet(backbone,input_shape=( img_height , img_width,3), classes=3,encoder_weights=None)
+        # self.normalizer.load_weights(nor_path)
         
     
     def get_text(self,img,lang):
@@ -61,16 +61,15 @@ class TessModOCR(object):
         return res.split("\n")[0]
 
 
-    def __call__(self,images,lang="ben",debug=False,get_text=True):
+    def __call__(self,images,lang="ben",debug=False):
         '''
             infers on a word by word basis
             args:
                 data    :   path of image to predict/ a numpy array
         '''
-        #--------------------------------------------modifier
+        #--------------------------------------------modifier----------------------------------
         imgs=[]
         mods=[]
-        norms=[]
         for data in tqdm(images):
             if type(data)==str:
                 # process word image
@@ -89,27 +88,43 @@ class TessModOCR(object):
             pimg=np.squeeze(pimg)
             pimg=pimg*255
             pimg=pimg.astype("uint8")
+            if debug:
+                plt.imshow(pimg)
+                plt.show()
             _,cimg = cv2.threshold(pimg,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
             idx=np.where(cimg>0)
             y_min,y_max,x_min,x_max = np.min(idx[0]), np.max(idx[0]), np.min(idx[1]), np.max(idx[1])
-            pimg=img[y_min:y_max,x_min:x_max]
+            pimg=pimg[y_min:y_max,x_min:x_max]
+            pimg=255-pimg
+            pimg=cv2.merge((pimg,pimg,pimg))
+            pimg,_=padWords(pimg,(self.img_height,self.img_width),ptype="left")
+            if debug:
+                plt.imshow(pimg)
+                plt.show()
+            #pimg=np.expand_dims(pimg,axis=0)
+            pimg=cv2.cvtColor(pimg,cv2.COLOR_BGR2GRAY)
             mods.append(pimg)
-        #--------------------------------------------modifier
-        
-        
-        
-        
-        
-        
-        
-        if get_text:
-            texts=[]
-            for pimg in pimgs:
-                texts.append(self.get_text(pimg,lang))
-            return texts 
-        else:
-            res=[]
-            for src,pimg in zip(srcs,pimgs):
-                out=self.get_rec(src,pimg,lang)
-                res.append(out)
-            return res
+        #--------------------------------------------modifier------------------------------------------------------
+
+        #--------------------------------------------normalizer------------------------------------------------------
+        # norms=[]
+        # img=np.vstack(mods)
+        # img=img/255
+        # pred= self.normalizer.predict(img)
+        # for i in range(len(imgs)):
+        #     pimg=pred[i,:,:,:]
+        #     pimg=np.squeeze(pimg)
+        #     pimg=pimg*255
+        #     pimg=pimg.astype("uint8")
+        #     if debug:
+        #         plt.imshow(pimg)
+        #         plt.show()
+            
+        #     pimg=cv2.cvtColor(pimg,cv2.COLOR_BGR2GRAY)
+        #     norms.append(pimg)
+        #--------------------------------------------normalizer------------------------------------------------------
+        texts=[]
+        for pimg in mods:
+            texts.append(self.get_text(pimg,lang))
+        return texts 
+    
