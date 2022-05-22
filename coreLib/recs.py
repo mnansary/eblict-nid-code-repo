@@ -30,7 +30,7 @@ class EngOCR(object):
         texts=self.model(img_list)
         return texts
 
-class ModRec(object):    
+class TessModOCR(object):
     def __init__(self,
                  model_path,
                  img_height = 64,
@@ -45,25 +45,19 @@ class ModRec(object):
                 backbone    :   backbone for modifier
                 use_tesseract:  compare tesseract results with easy ocr
         '''
+        mod_path=os.path.join(model_path,"mod/mod.h5")
+        nor_path=os.path.join(model_path,"mod/norm.h5")
         self.img_height = img_height
         self.img_width  = img_width
         self.modifier= sm.Unet(backbone,input_shape=( img_height , img_width,3), classes=3,encoder_weights=None)
         self.modifier.load_weights(model_path)
+        self.normalizer= sm.Unet(backbone,input_shape=( img_height , img_width,3), classes=3,encoder_weights=None)
+        self.normalizer.load_weights(model_path)
         
-    def get_rec(self,src,pimg,lang):
-        # outs
-        outs={}
-        res = pytesseract.image_to_string(pimg, lang=lang, config='--psm 6')
-        outs["ModRec"]=res.split("\n")[0]
-        
-        res = pytesseract.image_to_string(src, lang=lang, config='--psm 6')
-        outs["TessRec"]=res.split("\n")[0]
-        
-        return outs
     
-    def get_text(self,pimg,lang):
+    def get_text(self,img,lang):
         # outs
-        res = pytesseract.image_to_string(pimg, lang=lang, config='--psm 6')
+        res = pytesseract.image_to_string(img, lang=lang, config='--psm 6')
         return res.split("\n")[0]
 
 
@@ -73,48 +67,41 @@ class ModRec(object):
             args:
                 data    :   path of image to predict/ a numpy array
         '''
-        srcs=[]
+        #--------------------------------------------modifier
         imgs=[]
-        pimgs=[]
+        mods=[]
+        norms=[]
         for data in tqdm(images):
             if type(data)==str:
                 # process word image
                 img=cv2.imread(data)
             else:
                 img=np.copy(data)
-            # raw gray
-            src=np.copy(img)
-            src=cv2.cvtColor(src,cv2.COLOR_BGR2GRAY)
-            srcs.append(src)
-            if debug:
-                plt.imshow(img)
-                plt.show()
-            # mod data
-            im=Image.fromarray(img)
-            enhancer = ImageEnhance.Sharpness(im)
-            im=enhancer.enhance(4)
             
-            img=np.array(im)
             img,_=padWords(img,(self.img_height,self.img_width),ptype="left")
-            if debug:
-                plt.imshow(img)
-                plt.show()
             img=np.expand_dims(img,axis=0)
             img=img/255
             imgs.append(img)
         img=np.vstack(imgs)
         pred= self.modifier.predict(img)
-        
         for i in range(len(imgs)):
-            pimg=pred[i][:,:,-1]
+            pimg=pred[i,:,:,-1]
             pimg=np.squeeze(pimg)
             pimg=pimg*255
             pimg=pimg.astype("uint8")
-            
-            if debug:
-                plt.imshow(pimg)
-                plt.show()
-            pimgs.append(pimg)
+            _,cimg = cv2.threshold(pimg,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+            idx=np.where(cimg>0)
+            y_min,y_max,x_min,x_max = np.min(idx[0]), np.max(idx[0]), np.min(idx[1]), np.max(idx[1])
+            pimg=img[y_min:y_max,x_min:x_max]
+            mods.append(pimg)
+        #--------------------------------------------modifier
+        
+        
+        
+        
+        
+        
+        
         if get_text:
             texts=[]
             for pimg in pimgs:

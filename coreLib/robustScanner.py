@@ -18,7 +18,112 @@ import math
 from glob import glob
 from tqdm.auto import tqdm
 from scipy.special import softmax
-from .utils import LOG_INFO,padWords
+from termcolor import colored
+#---------------------------------------------------------------
+# utils
+#---------------------------------------------------------------
+def LOG_INFO(msg,mcolor='blue'):
+    '''
+        prints a msg/ logs an update
+        args:
+            msg     =   message to print
+            mcolor  =   color of the msg    
+    '''
+    print(colored("#LOG     :",'green')+colored(msg,mcolor))
+
+#---------------------------------------------------------------
+# recognition utils
+#---------------------------------------------------------------
+def padData(img,pad_loc,pad_dim,pad_type,pad_val):
+    '''
+        pads an image with white value
+        args:
+            img     :       the image to pad
+            pad_loc :       (lr/tb) lr: left-right pad , tb=top_bottom pad
+            pad_dim :       the dimension to pad upto
+            pad_type:       central or left aligned pad
+            pad_val :       the value to pad 
+    '''
+    
+    if pad_loc=="lr":
+        # shape
+        h,w,d=img.shape
+        if pad_type=="central":
+            # pad widths
+            left_pad_width =(pad_dim-w)//2
+            # print(left_pad_width)
+            right_pad_width=pad_dim-w-left_pad_width
+            # pads
+            left_pad =np.ones((h,left_pad_width,3))*pad_val
+            right_pad=np.ones((h,right_pad_width,3))*pad_val
+            # pad
+            img =np.concatenate([left_pad,img,right_pad],axis=1)
+        else:
+            # pad widths
+            pad_width =pad_dim-w
+            # pads
+            pad =np.ones((h,pad_width,3))*pad_val
+            # pad
+            img =np.concatenate([img,pad],axis=1)
+    else:
+        # shape
+        h,w,d=img.shape
+        # pad heights
+        if h>= pad_dim:
+            return img 
+        else:
+            pad_height =pad_dim-h
+            # pads
+            pad =np.ones((pad_height,w,3))*pad_val
+            # pad
+            img =np.concatenate([img,pad],axis=0)
+    return img.astype("uint8") 
+#---------------------------------------------------------------
+def padWords(img,dim,ptype="central",pvalue=255,scope_pad=50):
+    '''
+        corrects an image padding 
+        args:
+            img     :       numpy array of single channel image
+            dim     :       tuple of desired img_height,img_width
+            ptype   :       type of padding (central,left)
+            pvalue  :       the value to pad
+        returns:
+            correctly padded image
+
+    '''
+    img_height,img_width=dim
+    mask=0
+    # check for pad
+    h,w,d=img.shape
+    w_new=int(img_height* w/h) 
+    img=cv2.resize(img,(w_new,img_height),fx=0,fy=0, interpolation = cv2.INTER_NEAREST)
+    h,w,d=img.shape
+    if w > img_width:
+        # for larger width
+        h_new= int(img_width* h/w) 
+        img=cv2.resize(img,(img_width,h_new),fx=0,fy=0, interpolation = cv2.INTER_NEAREST)
+        # pad
+        img=padData(img,
+                     pad_loc="tb",
+                     pad_dim=img_height,
+                     pad_type=ptype,
+                     pad_val=pvalue)
+        mask=img_width
+
+    elif w < img_width:
+        # pad
+        img=padData(img,
+                    pad_loc="lr",
+                    pad_dim=img_width,
+                    pad_type=ptype,
+                    pad_val=pvalue)
+        mask=w+scope_pad
+        if mask>img_width:
+            mask=img_width
+    
+    # error avoid
+    img=cv2.resize(img,(img_width,img_height),fx=0,fy=0, interpolation = cv2.INTER_NEAREST)
+    return img,mask 
 
 
 #----------------
@@ -67,53 +172,51 @@ class DotAttention(tf.keras.layers.Layer):
 
 class RobustScanner(object):
     def __init__(self,model_dir):
-        
-        #-------------
-        # config-globals
-        #-------------
-        with open(os.path.join(model_dir,"rec","vocab.json")) as f:
-            vocab = json.load(f)["vocab"]    
-        self.vocab=vocab
-
         #-------------------
         # fixed params
         #------------------
-        self.img_height  =  64
-        self.img_width   =  512
-        self.nb_channels =  1
-        self.pos_max     =  40          
-        self.enc_filters =  256
+        self.nb_channels =  3        
+        self.enc_filters =  512
         self.factor      =  32
+        #-------------
+        # config-globals
+        #-------------
+        config_json=os.path.join(model_dir,"rec","config.json")
+        with open(config_json) as f:
+            conf = json.load(f)
+
+        
+        self.img_height  =  conf["img_height"]
+        self.img_width   =  conf["img_width"]
+        self.vocab       =  conf["vocab"]
+        self.pos_max     =  conf["pos_max"]
+        
 
         # calculated
-        self.enc_shape   =(self.img_height//self.factor,self.img_width//self.factor, self.enc_filters )
-        self.attn_shape  =(None, self.enc_filters )
-        self.mask_len    =int((self.img_width//self.factor)*(self.img_height//self.factor))
+        self.enc_shape   =  (self.img_height//self.factor,self.img_width//self.factor, self.enc_filters )
+        self.attn_shape  =  (None, self.enc_filters )
+        self.mask_len    =  int((self.img_width//self.factor)*(self.img_height//self.factor))
+        self.start_value    =self.vocab.index("start")
+        self.end_value      =self.vocab.index("end") 
+        self.pad_value      =self.vocab.index("pad")
+
         
-        self.start_end=len(vocab)+1
-        self.pad_value=len(vocab)+2
-
-        LOG_INFO(f"Label len:{self.pos_max}")
-        LOG_INFO(f"Vocab len:{len(self.vocab)}")
-        LOG_INFO(f"Pad Value:{self.pad_value}")
-        LOG_INFO(f"Start End:{self.start_end}")
-
-        strategy = tf.distribute.OneDeviceStrategy(device="/CPU:0")
-        with strategy.scope():
-            self.encm    =  self.encoder()
-            self.encm.load_weights(os.path.join(model_dir,"rec","enc.h5"))      
-            LOG_INFO("encm loaded")
-            self.seqm    =  self.seq_decoder()
-            self.seqm.load_weights(os.path.join(model_dir,"rec","seq.h5"))      
-            LOG_INFO("seqm loaded")
-            
-            self.posm    =  self.pos_decoder()
-            self.posm.load_weights(os.path.join(model_dir,"rec","pos.h5"))      
-            LOG_INFO("posm loaded")
-            
-            self.fusm    =  self.fusion()
-            self.fusm.load_weights(os.path.join(model_dir,"rec","fuse.h5"))      
-            LOG_INFO("fusm loaded")
+        #strategy = tf.distribute.OneDeviceStrategy(device="/CPU:0")
+        #with strategy.scope():
+        self.encm    =  self.encoder()
+        self.encm.load_weights(os.path.join(model_dir,"rec","enc.h5"))      
+        LOG_INFO("encm loaded")
+        self.seqm    =  self.seq_decoder()
+        self.seqm.load_weights(os.path.join(model_dir,"rec","seq.h5"))      
+        LOG_INFO("seqm loaded")
+        
+        self.posm    =  self.pos_decoder()
+        self.posm.load_weights(os.path.join(model_dir,"rec","pos.h5"))      
+        LOG_INFO("posm loaded")
+        
+        self.fusm    =  self.fusion()
+        self.fusm.load_weights(os.path.join(model_dir,"rec","fuse.h5"))      
+        LOG_INFO("fusm loaded")
         
     def encoder(self):
         '''
@@ -150,7 +253,7 @@ class RobustScanner(object):
         enc=tf.keras.Input(shape=self.enc_shape,name='enc_seq')
         
         # embedding,weights=[seq_emb_weight]
-        embedding=tf.keras.layers.Embedding(self.pad_value+2,self.enc_filters)(gt)
+        embedding=tf.keras.layers.Embedding(len(self.vocab)+1,self.enc_filters)(gt)
         # sequence layer (2xlstm)
         lstm=tf.keras.layers.LSTM(self.enc_filters,return_sequences=True)(embedding)
         query=tf.keras.layers.LSTM(self.enc_filters,return_sequences=True)(lstm)
@@ -211,23 +314,20 @@ class RobustScanner(object):
         xs=tf.keras.layers.Activation("sigmoid")(x)
         x =tf.keras.layers.Multiply()([xl,xs])
         # prediction
-        x=tf.keras.layers.Dense(self.pad_value+1,activation=None)(x)
+        x=tf.keras.layers.Dense(len(self.vocab),activation=None)(x)
         return tf.keras.Model(inputs=[gt_attn,pt_attn],outputs=x,name="rs_fusion")
 
 
         
-    def porcess_data(self,crops):
+    
+    def process_images(self,img_list):
         images=[]
         masks=[]
         poss=[]
             
-        for crop in tqdm(crops):
+        for word in img_list:
             # word
-            word,vmask=padWords(crop,(self.img_height,self.img_width),ptype="left")
-            word=cv2.cvtColor(word,cv2.COLOR_BGR2GRAY)
-            plt.imshow(word)
-            plt.show()
-            word=np.expand_dims(word,axis=-1) 
+            word,vmask=padWords(word,(self.img_height,self.img_width),ptype="left")
             word=np.expand_dims(word,axis=0) 
             # image
             images.append(word)
@@ -246,6 +346,7 @@ class RobustScanner(object):
         
         return images,masks,poss
 
+    
     def predict_on_batch(self,batch,infer_len):
         '''
             predicts on batch
@@ -271,20 +372,20 @@ class RobustScanner(object):
         for w_label in label:
             _label=[]
             for v in w_label[1:]:
-                if v==self.start_end:
+                if v==self.end_value:
                     break
                 _label.append(v)
             texts.append("".join([self.vocab[l] for l in _label]))
         return texts
 
-    def __call__(self,crops,batch_size=32,infer_len=10):
+    def __call__(self,image_list,batch_size=32,infer_len=20):
         '''
             final wrapper
         '''
         texts=[]
-        images,masks,poss=self.porcess_data(crops)
-        
-        for idx in tqdm(range(0,len(images),batch_size)):
+        images,masks,poss=self.process_images(image_list)
+            
+        for idx in range(0,len(images),batch_size):
             batch={}
             # image
             batch["image"]=images[idx:idx+batch_size]
@@ -297,7 +398,9 @@ class RobustScanner(object):
             batch["mask"]  =[np.expand_dims(mask,axis=0) for mask in masks[idx:idx+batch_size]]
             batch["mask"]  =np.vstack(batch["mask"])
             # label
-            batch["label"] =np.ones_like(batch["pos"])*self.start_end
+            batch["label"] =np.ones_like(batch["pos"])*self.start_value
             # recog
             texts+=self.predict_on_batch(batch,infer_len)
         return texts
+
+    

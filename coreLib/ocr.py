@@ -8,12 +8,12 @@ from tkinter.messagebox import NO
 #-------------------------
 # imports
 #-------------------------
-from .recs import ModRec
+from .recs import EngOCR
 from .yolo import YOLO
 from .dbnet import Detector
 from .utils import localize_box,LOG_INFO
 from .craft import auto_correct_image_orientation
-#from .robustScanner import RobustScanner
+from .robustScanner import RobustScanner
 from craft_text_detector import (
     load_craftnet_model,
     load_refinenet_model,
@@ -38,17 +38,17 @@ if any(gpu_devices):
     
 class OCR(object):
     def __init__(self,weights_dir):
-        self.loc=YOLO(os.path.join(weights_dir,"yolo/yolo.onnx"),labels=['sign', 'bname', 'ename', 'fname', 'mname', 'dob', 'nid', 'front', 'addr', 'back'])
+        self.loc=YOLO(os.path.join(weights_dir,"yolo/yolo-t.onnx"),labels=['sign', 'bname', 'ename', 'fname', 'mname', 'dob', 'nid', 'front', 'addr', 'back'])
         LOG_INFO("Loaded YOLO")
         self.det = Detector("db_resnet50")
         LOG_INFO("Loaded DBNET")
         self.refine_net = load_refinenet_model(cuda=True)
         self.craft_net = load_craftnet_model(cuda=True)
         LOG_INFO("Loaded CRAFT")
-        # self.engocr    = EngOCR()
-        # LOG_INFO("Loaded EngOCR")
-        self.ocr    = ModRec(os.path.join(weights_dir,"mod/mod.h5"))
-        LOG_INFO("Loaded Modifier Rec")
+        self.engocr    = EngOCR()
+        LOG_INFO("Loaded EngOCR")
+        self.banocr    = RobustScanner("weights/")
+        LOG_INFO("Loaded Robust Scanner")
         
     def get_oriented_data(self,img):
         # read image
@@ -131,10 +131,10 @@ class OCR(object):
         idx_crops=[crops[i] for i in idx]
         
         en_crops=en_name_crops+dob_crops+idx_crops
-        result = self.ocr(en_crops,lang="eng",debug=debug)
+        result = self.engocr(en_crops)
 
         ## text fitering
-        en_text=[i for i in result]# no conf
+        en_text=[i for i,_ in result]# no conf
         en_name=" ".join(en_text[:len(en_name_crops)])
         en_text=en_text[len(en_name_crops):]
         dob="".join(en_text[:len(dob_crops)])
@@ -161,7 +161,7 @@ class OCR(object):
         
         bn_crops=bn_name_crops+fname_crops+mname_crops
         
-        bn_texts=self.ocr(bn_crops,debug=debug)
+        bn_texts=self.banocr(bn_crops)
         ## text fitering
         bn_name=" ".join(bn_texts[:len(bn_name_crops)])
         bn_texts=bn_texts[len(bn_name_crops):]
