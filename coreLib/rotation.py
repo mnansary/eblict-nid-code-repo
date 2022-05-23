@@ -6,7 +6,6 @@ from __future__ import print_function
 # ---------------------------------------------------------
 # imports
 # ---------------------------------------------------------
-from craft_text_detector import read_image
 import numpy as np
 import cv2  
 from statistics import median_low
@@ -47,8 +46,7 @@ def get_max_width_length_ratio(contour: np.ndarray) -> float:
     _, (w, h), _ = cv2.minAreaRect(contour)
     return max(w / h, h / w)
 
-def create_mask(image,prediction_result):
-    regions=prediction_result["boxes"]
+def create_mask(image,regions):
     h,w,_=image.shape
     mask=np.zeros((h,w))
     for i, region in enumerate(regions):
@@ -61,8 +59,8 @@ def create_mask(image,prediction_result):
         )
     return mask
  
-def auto_correct_image_orientation(image,prediction_result):
-    mask=create_mask(image,prediction_result)
+def auto_correct_image_orientation(image,result):
+    mask=create_mask(image,result)
     h,w=mask.shape
     # extract contours
     contours, _ = cv2.findContours(mask.astype("uint8"), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)

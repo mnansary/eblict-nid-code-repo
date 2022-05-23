@@ -4,65 +4,41 @@
 """
 from __future__ import print_function
 from tkinter.messagebox import NO
+from unittest import result
 
 #-------------------------
 # imports
 #-------------------------
-from .recs import EngOCR#,BanOCR,Modifier
 from .yolo import YOLO
-from .dbnet import Detector
 from .utils import localize_box,LOG_INFO
-from .craft import auto_correct_image_orientation
-#from .robustScanner import RobustScanner
-from craft_text_detector import (
-    load_craftnet_model,
-    load_refinenet_model,
-    get_prediction,
-    read_image,
-)
+from .rotation import auto_correct_image_orientation
+from .paddet import Detector
 from .checks import processNID,processDob
+from paddleocr import PaddleOCR
 import os
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt 
 import copy
 import pandas as pd
-import tensorflow as tf
 from time import time
 #-------------------------
 # class
 #------------------------
-gpu_devices = tf.config.experimental.list_physical_devices('GPU')
-if any(gpu_devices):
-    tf.config.experimental.set_memory_growth(gpu_devices[0], True)
+
     
 class OCR(object):
     def __init__(self,weights_dir):
         self.loc=YOLO(os.path.join(weights_dir,"yolo/yolo.onnx"),labels=['sign', 'bname', 'ename', 'fname', 'mname', 'dob', 'nid', 'front', 'addr', 'back'])
         LOG_INFO("Loaded YOLO")
-        self.det = Detector("db_resnet50")
-        LOG_INFO("Loaded DBNET")
-        self.refine_net = load_refinenet_model(cuda=True)
-        self.craft_net = load_craftnet_model(cuda=True)
-        LOG_INFO("Loaded CRAFT")
-        self.engocr    = EngOCR()
-        LOG_INFO("Loaded EngOCR")
+        self.base=PaddleOCR(use_angle_cls=True, lang='en',rec_algorithm='SVTR_LCNet',use_gpu=True)
+        self.det=Detector()
+        LOG_INFO("Loaded Paddle")
+
         
-    def get_oriented_data(self,img):
-        # read image
-        image = read_image(img)
-        # perform prediction
-        prediction_result = get_prediction(
-            image=image,
-            craft_net=self.craft_net,
-            refine_net=self.refine_net,
-            text_threshold=0.7,
-            link_threshold=0.4,
-            low_text=0.4,
-            cuda=True,
-            long_size=1280
-        )
-        image,mask=auto_correct_image_orientation(image,prediction_result)
+    def get_oriented_data(self,image):
+        result= self.base.ocr(image,rec=False)
+        image,_=auto_correct_image_orientation(image,result)
         return image
 
     
@@ -130,7 +106,7 @@ class OCR(object):
         idx_crops=[crops[i] for i in idx]
         
         en_crops=en_name_crops+dob_crops+idx_crops
-        res_eng = self.engocr(en_crops)
+        res_eng = self.base.ocr(en_crops,det=False,cls=False)
 
         ## text fitering
         en_text=[i for i,_ in res_eng]# no conf
@@ -211,7 +187,7 @@ class OCR(object):
                 plt.show()
             
             # text detection
-            boxes,crops=self.det.detect(img,img,debug=debug)
+            boxes,crops=self.det.detect(img,self.base)
             if face=="front":
                 result=self.process_front(boxes,locs,crops,debug,result)
                 return result

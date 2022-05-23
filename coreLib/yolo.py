@@ -256,7 +256,6 @@ class YOLO(object):
                 x1e=min(x1b,x1f)
                 x2e=max(x2b,x2f)
                 ymid=y2b+(y1f-y2b)//2
-                print(ymid,y2b,y1f)
                 h2=(y2b-y1b)//2
                 y1e=ymid-h2 
                 y2e=ymid+h2

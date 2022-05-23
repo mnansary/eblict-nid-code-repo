@@ -132,3 +132,8 @@ debug.ipynb
 data/*
 .vscode/*
 unstable/*
+tests/*.jpg
+tests/*.png
+tests/*.jpeg
+tests/*.py
+

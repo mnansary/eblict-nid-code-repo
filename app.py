@@ -35,52 +35,52 @@ def index():
 @app.route('/predict', methods=['GET', 'POST'])
 def upload():
     if request.method == 'POST':
-        #try:
-        # Get the file from post request
-        f = request.files['file']
-        basepath = os.path.dirname(__file__)
-        file_path = os.path.join(basepath,"tests",secure_filename(f.filename))
-        f.save(file_path)
-        
-        face=request.form["face"]
-        get_bangla=request.form.get("bangla")
-        ret_photo=request.form.get("photo")
-        ret_sign=request.form.get("sign")
-        exec_rot=request.form.get("checkrotation")
-        
-        if get_bangla is not None:
-            get_bangla=True
-        else:
-            get_bangla=False
+        try:
+            # Get the file from post request
+            f = request.files['file']
+            basepath = os.path.dirname(__file__)
+            file_path = os.path.join(basepath,"tests",secure_filename(f.filename))
+            f.save(file_path)
+            
+            face=request.form["face"]
+            get_bangla=request.form.get("bangla")
+            ret_photo=request.form.get("photo")
+            ret_sign=request.form.get("sign")
+            exec_rot=request.form.get("checkrotation")
+            
+            if get_bangla is not None:
+                get_bangla=True
+            else:
+                get_bangla=False
 
-        if ret_photo is not None:
-            ret_photo =True
-        else:
-            ret_photo =False
+            if ret_photo is not None:
+                ret_photo =True
+            else:
+                ret_photo =False
 
-        if ret_sign is not None:
-            ret_sign=True
-        else:
-            ret_sign=False
+            if ret_sign is not None:
+                ret_sign=True
+            else:
+                ret_sign=False
 
-        if exec_rot is not None:
-            exec_rot=True
-        else:
-            exec_rot=False
-        
-        
-        data=ocr(file_path,
-                face,
-                get_bangla=get_bangla,
-                exec_rot=exec_rot,
-                ret_photo=ret_photo,
-                ret_sign=ret_sign)
-        
-        return jsonify(data)
+            if exec_rot is not None:
+                exec_rot=True
+            else:
+                exec_rot=False
+            
+            
+            data=ocr(file_path,
+                    face,
+                    get_bangla=get_bangla,
+                    exec_rot=exec_rot,
+                    ret_photo=ret_photo,
+                    ret_sign=ret_sign)
+            
+            return jsonify(data)
     
-        # except Exception as e:
-        #     print(e)
-        #     return jsonify({"error":"processing failed.Please upload properly"})
+        except Exception as e:
+            print(e)
+            return jsonify({"error":"processing failed.Please upload properly"})
     
     return jsonify({"error":"processing failed.Please upload properly"})
 
