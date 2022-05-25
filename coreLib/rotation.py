@@ -76,10 +76,10 @@ def auto_correct_image_orientation(image,result):
             angles.append(angle - 90)
 
     if len(angles) == 0:
-        return image
+        return image,mask,0
     else:
         angle=int(median_low(angles))
         image=rotate_image(image,angle)
         mask=rotate_image(mask,angle)
-        return image,mask
+        return image,mask,angle
          

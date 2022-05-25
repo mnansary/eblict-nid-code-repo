@@ -32,7 +32,7 @@ $(document).ready(function () {
         // Make prediction by calling api /predict
         $.ajax({
             type: 'POST',
-            url: '/predict',
+            url: '/niddata',
             data: formdata,
             contentType: false,
             cache: false,

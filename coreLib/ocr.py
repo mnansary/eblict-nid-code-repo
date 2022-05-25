@@ -36,12 +36,6 @@ class OCR(object):
         LOG_INFO("Loaded Paddle")
 
         
-    def get_oriented_data(self,image):
-        result= self.base.ocr(image,rec=False)
-        image,_=auto_correct_image_orientation(image,result)
-        return image
-
-    
     def process_boxes(self,text_boxes,region_dict,exclude_list):
         '''
             keeps relevant boxes with respect to region
@@ -86,13 +80,58 @@ class OCR(object):
         crop=img[y1:y2,x1:x2]
         return crop           
         
+    #-------------------------------------------------------------------------------------------------------------------------
+    # exectutives
+    #-------------------------------------------------------------------------------------------------------------------------
+    def execite_rotation_fix(self,image):
+        result= self.base.ocr(image,rec=False)
+        image,mask,angle=auto_correct_image_orientation(image,result)
+        # -- coverage
+        h,w,_=image.shape
+        idx=np.where(mask>0)
+        y1,y2,x1,x2 = np.min(idx[0]), np.max(idx[0]), np.min(idx[1]), np.max(idx[1])
+        ht=y2-y1
+        wt=x2-x1
+        coverage=round(((ht*wt)/(h*w))*100,2)  
 
-    def process_front(self,boxes,locs,crops,debug,result):
-        st=time()
+        rot_info={"operation":"rotation-fix",
+                  "optimized-angle":angle,
+                  "text-area-coverage":coverage}
+
+        return image,rot_info
+
+
+    def execite_visibility_check(self):
+        viz_info={"operation":"visibility-check",
+                  "status":"not-available-yet"}
+        return viz_info
+    
+    #---- place holders--------------------------------
+    def get_photo(self):
+        return "not-available-yet"
+    
+    def get_signature(self):
+        return "not-available-yet"
+    
+    def get_addr(self):
+        return {"address":"not-available-yet"}
+
+    def get_bangla_info(self):
+        bn_info={}
+        bn_info["bn-name"]="not-available-yet"
+        bn_info["f-name"]="not-available-yet"
+        bn_info["m-name"]="not-available-yet"
+        return bn_info
+        
+    #---- place holders--------------------------------
+    
+    #-------------------------------------------------------------------------------------------------------------------------
+    # extractions
+    #-------------------------------------------------------------------------------------------------------------------------
+    def get_basic_info(self,boxes,locs,crops,debug):
+        basic={}
         # sorted box dictionary
         box_dict=self.process_boxes(boxes,locs,["sign","front","back","addr"])
-    
-    
         # english ocr
         eng_keys=["nid","dob","ename"]
         ## en-name
@@ -117,55 +156,33 @@ class OCR(object):
         idx="".join(en_text)
 
         
-        result["English name"]=en_name
-        result["NID"]=processNID(idx) 
-        result["DOB"]=processDob(dob) 
+        basic["en-name"]=en_name
+        basic["nid"]=processNID(idx) 
+        basic["dob"]=processDob(dob) 
 
-        if result["NID"] is None:
-            result["NID"]="NID Number not found"
+        if basic["nid"] is None:
+            basic["nid"]="nid data not found. try agian with different image"
                 
-        if result["DOB"] is None:
-            result["DOB"]="Date of birth not found"
-        
-        if debug:
-            print("EngOCR batch time:",st-time())
-
-        return result 
+        if basic["dob"] is None:
+            basic["dob"]="dob data not found.try again with different image"
+        return basic 
+    
     
 
             
-    def __call__(self,
-                img_path,
-                face,
-                get_bangla=False,
-                exec_rot=True,
-                ret_photo=False,
-                ret_sign=False,
-                debug=False):
+    def __call__(self,img_path,face,rets,execs,debug=False):
+        # return containers
+        data={}
+        included={}
+        executed=[]
+        # params
+        exec_rot,exec_viz=execs
+        ret_bangla,ret_photo,ret_sign=rets
         
-        result={}
-        #------------------------------tempv1---------------------------------
-        if face=="back":
-            if ret_photo:
-                result["photo"]="NID back has no photo available!!!"
-            if ret_sign:
-                result["sign"]="NID back has no sign available!!!"
-            result["address"]="Not implemented yet"
-            return result
-        
-        if get_bangla:
-            result["Bangla name"]="Not implemented yet"
-            result["Fathers name"]="Not implemented yet"
-            result["Mothers name"]="Not implemented yet"
-        #------------------------------tempv1---------------------------------        
-        try:
-            img=cv2.imread(img_path)
-            img=cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
-        except Exception as e:
-            print("probelem reading image:",img_path)
-            result["error"]="probelem reading image:"
-            return result
-
+        # -----------------------start-----------------------
+        img=cv2.imread(img_path)
+        img=cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
+    
         if face=="front":
             clss=['bname', 'ename', 'fname', 'mname', 'dob', 'nid']
         else:
@@ -174,13 +191,19 @@ class OCR(object):
             plt.imshow(img)
             plt.show()
         
+        # visibility place holder
+        if exec_viz:
+            viz_info=self.execite_visibility_check()
+            executed.append(viz_info)
+        
         # orientation
         if exec_rot:
-            img=self.get_oriented_data(img)
+            img,rot_info=self.execite_rotation_fix(img)
+            executed.append(rot_info)
+        
         
         # check yolo
         img,locs=self.loc(img,clss)
-        
         if img is not None:
             if debug:
                 plt.imshow(img)
@@ -189,10 +212,21 @@ class OCR(object):
             # text detection
             boxes,crops=self.det.detect(img,self.base)
             if face=="front":
-                result=self.process_front(boxes,locs,crops,debug,result)
-                return result
+                data["nid-basic-info"]=self.get_basic_info(boxes,locs,crops,debug)
+                if ret_bangla:
+                    included["bangla-info"]=self.get_bangla_info()
+                if ret_photo:
+                    included["photo"]=self.get_photo()
+                if ret_sign:
+                    included["signature"]=self.get_signature()
+            else:
+                data["nid-back-info"]=self.get_addr()
+            # containers
+            data["included"]=included
+            data["executed"]=executed
+            return data 
+
         else:
-            result["error"]="Data Fields not located.Please Take new image"
-            return result
+            return None
         
         
