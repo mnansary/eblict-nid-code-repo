@@ -126,7 +126,7 @@ def consttruct_error(msg,etype,msg_code,details,suggestion=""):
 
 
 
-@app.route('/niddata', methods=['GET', 'POST'])
+@app.route('/predictnid', methods=['GET', 'POST'])
 def upload():
     if request.method == 'POST':
         try:
