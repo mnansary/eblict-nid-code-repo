@@ -115,7 +115,14 @@ def handle_execs(executes):
     else:
         return None 
             
-    
+def consttruct_error(msg,etype,msg_code,details,suggestion=""):
+    error={"code":msg_code,
+           "type":etype,
+           "message":msg,
+           "details":details,
+           "suggestion":suggestion}
+    return error
+
 
 
 @app.route('/niddata', methods=['GET', 'POST'])
@@ -131,23 +138,23 @@ def upload():
             # handle card face
             face=handle_cardface(request.args.get("cardface"))
             if face is None:
-                return jsonify({"error":"wrong cardface parameter!use front or back "}) 
+                return jsonify({"error": consttruct_error("wrong cardface parameter","INVALID_PARAMETER","400","","use either front or back")}) 
 
             # handle includes
             rets=handle_includes(request.args.get("includes"))
             if rets is None:
-                return jsonify({"error":"wrong includes parameter! valid includes: bangla,photo,signature"})
+                return jsonify({"error":consttruct_error("wrong includes parameter","INVALID_PARAMETER","400","","use any or all of the valid includes: bangla,photo,signature")})
 
             # handle executes
             execs=handle_execs(request.args.get("executes"))
             if execs is None:
-                return jsonify({"error":"wrong executes parameter! valid executes: visibility-check,rotation-fix"})
+                return jsonify({"error":consttruct_error("wrong executes parameter","INVALID_PARAMETER","400","","use any or all of the valid executes: visibility-check,rotation-fix") })
                 
             try:
                 # Get the file from post request
                 f = request.files['nidimage']
             except Exception as ef:
-                return jsonify({"error":"nidimage not received.Please send image as form data"})
+                return jsonify({"error":consttruct_error("nidimage not received","INVALID_PARAMETER","400","","Please send image as form data")})
                 
             save_start=time()
             # save file
@@ -158,7 +165,7 @@ def upload():
             try:
                 img=cv2.imread(file_path)
             except Exception as er:
-                return jsonify({"error":"image file not readable"})
+                return jsonify({"error":consttruct_error("image format not valid.","INVALID_IMAGE","400","","Please send .jpg/.png/.jpeg image file")})
             logs["execution-log"]["file-name"]=secure_filename(f.filename)
             logs["execution-log"]["card=face"]=face
             logs["execution-log"]["params"]={"bangla":rets[0],
@@ -172,19 +179,19 @@ def upload():
             ocr_out=ocr(file_path,face,rets,execs)
             logs["execution-log"]["ocr-processing-time"]=round(time()-proc_start,2)
             if ocr_out is None:
-                return jsonify({"error":"data fields not found. please try again with a different image."})
+                return jsonify({"error":consttruct_error("image is problematic","INVALID_IMAGE","400","","please try again with a clear nid image")})
             data={}
             data["data"]=ocr_out
             logs["execution-log"]["req-handling-time"]=round(time()-req_start,2)
             # logs
-            data["data"]["logs"]=logs 
+            #data["data"]["logs"]=logs 
             return jsonify(data)
     
         except Exception as e:
-            return jsonify({"error":"OCR processing failed.please try again with a different image"})
+            return jsonify({"error":consttruct_error("","INTERNAL_SERVER_ERROR","500","","please try again with a different image")})
     
-    return jsonify({"error":"POST Request processing failed"})
+    return jsonify({"error":consttruct_error("","INTERNAL_SERVER_ERROR","500","","please try again with a different image")})
 
 
 if __name__ == '__main__':
-    app.run(debug=False,host="0.0.0.0")
+    app.run(debug=True,host="0.0.0.0")
