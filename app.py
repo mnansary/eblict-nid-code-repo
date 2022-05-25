@@ -181,7 +181,7 @@ def upload():
             return jsonify(data)
     
         except Exception as e:
-            return jsonify({"error":"OCR processing failed"})
+            return jsonify({"error":"OCR processing failed.please try again with a different image"})
     
     return jsonify({"error":"POST Request processing failed"})
 
