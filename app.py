@@ -3,6 +3,7 @@
 @author:MD.Nazmuddoha Ansary
 """
 from __future__ import print_function
+from asyncio import FastChildWatcher
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 import cv2
@@ -10,6 +11,7 @@ import cv2
 from flask import Flask,request, render_template,jsonify
 from werkzeug.utils import secure_filename
 from time import time
+from pprint import pprint
 # models
 from coreLib.ocr import OCR
 # Define a flask app
@@ -32,7 +34,7 @@ def handle_cardface(face):
     elif face=="front":
         return "front"
     else:
-        return None  
+        return "invalid" 
 
 def handle_includes(includes):
     # default
@@ -59,14 +61,13 @@ def handle_includes(includes):
             ret=(provide_bangla,provide_photo,provide_sign) 
             return ret
         else:
-            return None
+            return "invalid"
     # multicase
     elif "," in includes:
         opts=includes.split(",")
-        print(opts)
         for opt in opts:
             if opt not in ["bangla","photo","signature"]:
-                return None
+                return "invalid"
         if "bangla" in opts:
             provide_bangla=True
         if "photo" in opts:
@@ -76,7 +77,7 @@ def handle_includes(includes):
         ret=(provide_bangla,provide_photo,provide_sign) 
         return ret
     else:
-        return None 
+        return "invalid"
             
 def handle_execs(executes):
     # default
@@ -99,13 +100,13 @@ def handle_execs(executes):
             execs=(exec_rot,exec_viz)
             return execs
         else:
-            return None
+            return "invalid"
     # multicase   #visibility-check,rotation-fix
     elif "," in executes:
         opts=executes.split(",")
         for opt in opts:
             if opt not in ["visibility-check","rotation-fix"]:
-                return None
+                return "invalid"
         if "rotation-fix" in opts:
             exec_rot=True
         if "visibility-check" in opts:
@@ -113,15 +114,15 @@ def handle_execs(executes):
         execs=(exec_rot,exec_viz)
         return execs
     else:
-        return None 
+        return "invalid"
             
 def consttruct_error(msg,etype,msg_code,details,suggestion=""):
-    error={"code":msg_code,
+    exec_error={"code":msg_code,
            "type":etype,
            "message":msg,
            "details":details,
            "suggestion":suggestion}
-    return error
+    return exec_error
 
 
 
@@ -137,17 +138,17 @@ def upload():
             req_start=time()
             # handle card face
             face=handle_cardface(request.args.get("cardface"))
-            if face is None:
+            if face =="invalid":
                 return jsonify({"error": consttruct_error("wrong cardface parameter","INVALID_PARAMETER","400","","use either front or back")}) 
 
             # handle includes
             rets=handle_includes(request.args.get("includes"))
-            if rets is None:
+            if rets =="invalid":
                 return jsonify({"error":consttruct_error("wrong includes parameter","INVALID_PARAMETER","400","","use any or all of the valid includes: bangla,photo,signature")})
 
             # handle executes
             execs=handle_execs(request.args.get("executes"))
-            if execs is None:
+            if execs =="invalid":
                 return jsonify({"error":consttruct_error("wrong executes parameter","INVALID_PARAMETER","400","","use any or all of the valid executes: visibility-check,rotation-fix") })
                 
             try:
@@ -185,6 +186,7 @@ def upload():
             logs["execution-log"]["req-handling-time"]=round(time()-req_start,2)
             # logs
             #data["data"]["logs"]=logs 
+            pprint(logs)
             return jsonify(data)
     
         except Exception as e:
@@ -194,4 +196,4 @@ def upload():
 
 
 if __name__ == '__main__':
-    app.run(debug=True,host="0.0.0.0")
+    app.run(debug=False,host="0.0.0.0")
