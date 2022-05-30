@@ -5,6 +5,8 @@
 from __future__ import print_function
 from asyncio import FastChildWatcher
 import os
+
+from scipy.misc import face
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 import cv2
 # Flask utils
@@ -193,6 +195,40 @@ def upload():
             return jsonify({"error":consttruct_error("","INTERNAL_SERVER_ERROR","500","","please try again with a different image")})
     
     return jsonify({"error":consttruct_error("","INTERNAL_SERVER_ERROR","500","","please try again with a different image")})
+
+
+@app.route('/predictnidviz', methods=['GET', 'POST'])
+def vizupload():
+    if request.method == 'POST':
+        try:
+            rets=(False,False,False)
+            execs=(True,False)
+            face="front"
+
+            try:
+                # Get the file from post request
+                f = request.files['nidimage']
+            except Exception as ef:
+                return jsonify(consttruct_error("nidimage not received","INVALID_PARAMETER","400","","Please send image as form data"))
+                
+            # save file
+            basepath = os.path.dirname(__file__)
+            file_path = os.path.join(basepath,"tests",secure_filename(f.filename))
+            f.save(file_path)
+            try:
+                img=cv2.imread(file_path)
+            except Exception as er:
+                return jsonify(consttruct_error("image format not valid.","INVALID_IMAGE","400","","Please send .jpg/.png/.jpeg image file"))
+            
+            data=ocr(file_path,face,rets,execs)
+            
+            return jsonify(data["nid-basic-info"])
+    
+        except Exception as e:
+            return jsonify(consttruct_error("","INTERNAL_SERVER_ERROR","500","","please try again with a different image"))
+    
+    return jsonify(consttruct_error("","INTERNAL_SERVER_ERROR","500","","please try again with a different image"))
+
 
 
 if __name__ == '__main__':
