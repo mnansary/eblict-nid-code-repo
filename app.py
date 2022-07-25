@@ -5,6 +5,7 @@
 from __future__ import print_function
 import os
 import pathlib
+import base64
 from datetime import datetime
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
@@ -21,7 +22,9 @@ app = Flask(__name__,static_folder="nidstatic")
 # initialize ocr
 ocr=OCR()
 
-
+def convert_and_save(b64_string,file_path):
+    with open(file_path, "wb") as fh:
+        fh.write(base64.decodebytes(b64_string.encode()))
 
 @app.route('/', methods=['GET'])
 def index():
@@ -88,6 +91,7 @@ def upload():
         try:
             # container
             logs={}
+            time_stamp=datetime.now().strftime("%m_%d_%Y,_%H_%M_%S")
             logs["req-time"] = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
             
             req_start=time()
@@ -125,8 +129,33 @@ def upload():
                                                          "valid executes:rotation-fix") })
                 
             try:
-                # Get the file from post request
-                f = request.files['nidimage']
+                save_start=time()
+                basepath = os.path.dirname(__file__)
+                if "nidimage" in request.files:
+                    # Get the file from post request
+                    f = request.files['nidimage']
+                    file_path = os.path.join(basepath,"tests",secure_filename(f.filename))
+                    # save file
+                    file_ext=pathlib.Path(file_path).suffix
+                    if file_ext not in [".jpg",".png",".jpeg"]:
+                        logs["error"]=f"received file-extension:{file_ext}"
+                        update_log(logs)
+                        return jsonify({"error":consttruct_error("image format not valid.",
+                                                                "INVALID_IMAGE","400",
+                                                                f"received file-extension:{file_ext}",
+                                                                "Please send .png image files")})
+                    
+                    f.save(file_path)
+                    logs["file-name"]=secure_filename(f.filename)
+            
+            
+                elif "base64nidimage" in request.form:
+                    basepath = os.path.dirname(__file__)
+                    file_path = os.path.join(basepath,"tests",f"upload_{time_stamp}.jpg")
+                    base64_img=request.form["base64nidimage"].replace(' ', '+').split(";base64,")[-1]
+                    convert_and_save(base64_img,file_path) 
+                    logs["file-name"]=f"upload_{time_stamp}.jpg"
+                
             except Exception as ef:
                 logs["error"]="nidimage not received"
                 update_log(logs)
@@ -136,22 +165,9 @@ def upload():
                                                          "",
                                                          "Please send image as form data")})
                 
-            save_start=time()
-            # save file
-            basepath = os.path.dirname(__file__)
-            file_path = os.path.join(basepath,"tests",secure_filename(f.filename))
-            file_ext=pathlib.Path(file_path).suffix
-            if file_ext not in [".jpg",".png",".jpeg"]:
-                logs["error"]=f"received file-extension:{file_ext}"
-                update_log(logs)
-                return jsonify({"error":consttruct_error("image format not valid.",
-                                                         "INVALID_IMAGE","400",
-                                                         f"received file-extension:{file_ext}",
-                                                         "Please send .png image files")})
             
-            f.save(file_path)
+            
             logs["file-save-time"]=round(time()-save_start,2)
-            logs["file-name"]=secure_filename(f.filename)
             logs["card-face"]=face
             logs["params"]={"bangla":ret_bangla,"rotation-fix":exec_rot}
             
