@@ -42,6 +42,14 @@ Gnome       : 3.36.8
 * **activate conda environment**: ```conda activate nidocr```
 * **install gpu dependencies**  : ```./install_gpu.sh```  
 
+```
+cd weights/
+gdown 1gbCGRwZ6H0TO-ddd4IBPFqCmnEaWH-z7
+gdown 1YwpcDJmeO5mXlPDj1K0hkUobpwGaq3YA
+cd ..
+python setup_check.py
+```
+
 
 **CPU INFERENCE SERVER CONFIG**  
 
