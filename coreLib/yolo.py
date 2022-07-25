@@ -7,7 +7,6 @@ from __future__ import print_function
 # imports
 #-------------------------
 import onnxruntime as ort
-import os
 import numpy as np
 import cv2 
 import matplotlib.pyplot as plt
@@ -15,47 +14,6 @@ import torch
 import torchvision
 import numpy as np
 
-#-------------------------
-# util
-#-------------------------
-def padDetectionImage(img,gray=False,pad_value=255):
-    cfg={}
-    if gray:
-        h,w=img.shape
-    else:
-        h,w,d=img.shape
-    if h>w:
-        # pad widths
-        pad_width =h-w
-        # pads
-        if gray:
-            pad =np.zeros((h,pad_width))
-        else:    
-            pad =np.ones((h,pad_width,d))*pad_value
-        # pad
-        img =np.concatenate([img,pad],axis=1)
-        # cfg
-        cfg["pad"]="width"
-        cfg["dim"]=w
-    
-    elif w>h:
-        # pad height
-        pad_height =w-h
-        # pads
-        if gray:
-            pad=np.zeros((pad_height,w))
-        else:
-            pad =np.ones((pad_height,w,d))*pad_value
-        # pad
-        img =np.concatenate([img,pad],axis=0)
-        # cfg
-        cfg["pad"]="height"
-        cfg["dim"]=h
-    else:
-        cfg=None
-    if not gray:
-        img=img.astype("uint8")
-    return img,cfg
 #-------------------------
 # model
 #------------------------
