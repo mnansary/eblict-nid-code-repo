@@ -10,6 +10,7 @@ code repo for eblict nid
 * **Installing conda**: Follow steps [here](https://docs.conda.io/projects/conda/en/latest/user-guide/install/linux.html) to install conda as needed
 * **create a conda environment**: ```conda create -n nidocr python=3.8.13```
 * **activate conda environment**: ```conda activate nidocr```
+* **install cpu dependencies**  : ```./install_cpu.sh```  
 
 
 **CPU INFERENCE SERVER CONFIG**  
