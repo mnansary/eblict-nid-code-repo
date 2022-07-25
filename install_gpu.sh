@@ -1,5 +1,5 @@
 #!/bin/sh
- conda install cudatoolkit=11.2 cudnn=8.2 -c conda-forge 
+conda install cudatoolkit=11.2 -c conda-forge 
 conda install paddlepaddle-gpu==2.3.0  -c https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/Paddle/  
 pip uninstall protobuf
 pip install --no-binary protobuf protobuf==3.18.0
