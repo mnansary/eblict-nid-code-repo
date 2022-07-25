@@ -205,9 +205,7 @@ class YOLO(object):
         self.labels=labels
     
     def process(self,data):
-        #data,_=padDetectionImage(data)
         h,w,_=data.shape
-        src=np.copy(data)
         data=cv2.resize(data,self.img_dim)
         data=np.transpose(data,(2,0,1))
         data=np.expand_dims(data,axis=0)
