@@ -12,6 +12,7 @@ import os
 import cv2 
 import numpy as np
 from PIL import Image, ImageEnhance
+import gdown
 #---------------------------------------------------------------
 def LOG_INFO(msg,mcolor='blue'):
     '''
@@ -33,6 +34,9 @@ def create_dir(base,ext):
     if not os.path.exists(_path):
         os.mkdir(_path)
     return _path
+#---------------------------------------------------------------
+def download(id,save_dir):
+    gdown.download(id=id,output=save_dir,quiet=False)
 #------------------------------------
 # region-utils 
 #-------------------------------------
