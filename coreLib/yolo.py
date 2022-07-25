@@ -227,15 +227,17 @@ class YOLO(object):
 
     def check_rois(self,clss,locs):
         found=True
-        
+        founds=[]
         if "ename" in clss:
             locs=self.check_ename(locs)
             
         for cls in clss:
             if locs[cls] is None:
                 found=False
-                return found
-        return found
+                return found,founds
+            else:
+                founds.append(cls)
+        return found,founds
 
     def __call__(self,img,clss,debug=False):
         '''
@@ -253,12 +255,13 @@ class YOLO(object):
                 plt.imshow(viz)
                 plt.show()
 
-            if self.check_rois(clss,locs):
+            _found,founds=self.check_rois(clss,locs)
+            if _found:
                 img=np.copy(data)
                 found=True
                 break
         
         if found:
-            return img,locs
+            return img,locs,founds
         else:
-            return None,None
+            return None,None,founds

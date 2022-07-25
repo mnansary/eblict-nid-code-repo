@@ -9,7 +9,6 @@ from __future__ import print_function
 import numpy as np
 import cv2  
 from statistics import median_low
-from math import floor
 
 def rotate_image(mat, angle):
     """
@@ -59,8 +58,7 @@ def create_mask(image,regions):
         )
     return mask
  
-def auto_correct_image_orientation(image,result):
-    mask=create_mask(image,result)
+def auto_correct_image_orientation(image,mask):
     h,w=mask.shape
     # extract contours
     contours, _ = cv2.findContours(mask.astype("uint8"), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)

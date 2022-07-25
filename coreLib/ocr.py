@@ -3,34 +3,46 @@
 @author:MD.Nazmuddoha Ansary
 """
 from __future__ import print_function
-from tkinter.messagebox import NO
-from unittest import result
 
 #-------------------------
 # imports
 #-------------------------
 from .yolo import YOLO
-from .utils import localize_box,LOG_INFO
+from .utils import localize_box,LOG_INFO,download
 from .rotation import auto_correct_image_orientation
 from .paddet import Detector
+from .bnocr import BanglaOCR
 from .checks import processNID,processDob
 from paddleocr import PaddleOCR
 import os
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt 
 import copy
 import pandas as pd
-from time import time
 #-------------------------
 # class
 #------------------------
 
     
 class OCR(object):
-    def __init__(self,weights_dir):
-        self.loc=YOLO(os.path.join(weights_dir,"yolo/yolo.onnx"),labels=['sign', 'bname', 'ename', 'fname', 'mname', 'dob', 'nid', 'front', 'addr', 'back'])
+    def __init__(self,   
+                 yolo_onnx="weights/yolo.onnx",
+                 yolo_gid="1gbCGRwZ6H0TO-ddd4IBPFqCmnEaWH-z7",
+                 bnocr_onnx="weights/bnocr.onnx",
+                 bnocr_gid="1YwpcDJmeO5mXlPDj1K0hkUobpwGaq3YA"):
+        
+        if not os.path.exists(yolo_onnx):
+            download(yolo_gid,yolo_onnx)
+        self.loc=YOLO(yolo_onnx,
+                      labels=['sign', 'bname', 'ename', 'fname', 
+                              'mname', 'dob', 'nid', 'front', 'addr', 'back'])
         LOG_INFO("Loaded YOLO")
+        
+        if not os.path.exists(bnocr_onnx):
+            download(bnocr_gid,bnocr_onnx)
+        self.bnocr=BanglaOCR(bnocr_onnx)
+        LOG_INFO("Loaded Bangla Model")        
+        
         self.base=PaddleOCR(use_angle_cls=True, lang='en',rec_algorithm='SVTR_LCNet',use_gpu=True)
         self.det=Detector()
         LOG_INFO("Loaded Paddle")
@@ -43,6 +55,7 @@ class OCR(object):
                 text_boxes  :  detected text boxes by the detector
                 region_dict :  key,value pair dictionary of region_bbox and field info 
                                => {"field_name":[x_min,y_min,x_max,y_max]}
+                exclude_list:  list of fields to be excluded 
         '''
         # extract region boxes
         region_boxes=[]
@@ -83,55 +96,38 @@ class OCR(object):
     #-------------------------------------------------------------------------------------------------------------------------
     # exectutives
     #-------------------------------------------------------------------------------------------------------------------------
-    def execite_rotation_fix(self,image):
-        result= self.base.ocr(image,rec=False)
-        image,mask,angle=auto_correct_image_orientation(image,result)
+    def get_coverage(self,image,mask):
         # -- coverage
         h,w,_=image.shape
         idx=np.where(mask>0)
         y1,y2,x1,x2 = np.min(idx[0]), np.max(idx[0]), np.min(idx[1]), np.max(idx[1])
         ht=y2-y1
         wt=x2-x1
-        coverage=round(((ht*wt)/(h*w))*100,2)  
+        coverage=round(((ht*wt)/(h*w))*100,2)
+        return coverage  
 
+
+    def execute_rotation_fix(self,image,mask):
+        image,mask,angle=auto_correct_image_orientation(image,mask)
         rot_info={"operation":"rotation-fix",
                   "optimized-angle":angle,
-                  "text-area-coverage":coverage}
+                  "text-area-coverage":self.get_coverage(image,mask)}
 
         return image,rot_info
 
 
-    def execite_visibility_check(self):
-        viz_info={"operation":"visibility-check",
-                  "status":"not-available-yet"}
-        return viz_info
-    
     #---- place holders--------------------------------
-    def get_photo(self):
-        return "not-available-yet"
-    
-    def get_signature(self):
-        return "not-available-yet"
-    
     def get_addr(self):
         return {"address":"not-available-yet"}
 
-    def get_bangla_info(self):
-        bn_info={}
-        bn_info["bn-name"]="not-available-yet"
-        bn_info["f-name"]="not-available-yet"
-        bn_info["m-name"]="not-available-yet"
-        return bn_info
         
     #---- place holders--------------------------------
     
     #-------------------------------------------------------------------------------------------------------------------------
     # extractions
     #-------------------------------------------------------------------------------------------------------------------------
-    def get_basic_info(self,boxes,locs,crops,debug):
+    def get_basic_info(self,box_dict,crops):
         basic={}
-        # sorted box dictionary
-        box_dict=self.process_boxes(boxes,locs,["sign","front","back","addr"])
         # english ocr
         eng_keys=["nid","dob","ename"]
         ## en-name
@@ -167,58 +163,91 @@ class OCR(object):
             basic["dob"]="dob data not found.try again with different image"
         return basic 
     
+    def get_bangla_info(self,box_dict,crops):
+        bn_info={}
+        # bangla ocr
+        bn_keys=["bname","fname","mname"]
+        ## b-name
+        b_name =box_dict[bn_keys[0]]
+        b_crops=[crops[i] for i in b_name]
+        ## f-name
+        f_name = box_dict[bn_keys[1]]
+        f_crops=[crops[i] for i in f_name]
+        ## m-name
+        m_name = box_dict[bn_keys[2]]
+        m_crops=[crops[i] for i in m_name]
+        
+        crops=b_crops+f_crops+m_crops
+        texts= self.bnocr(crops)
+
+        ## text fitering
+        b_name=" ".join(texts[:len(b_crops)])
+        texts=texts[len(b_crops):]
+        f_name=" ".join(texts[:len(f_crops)])
+        texts=texts[len(f_crops):]
+        m_name=" ".join(texts)
+        bn_info["bn-name"]=b_name
+        bn_info["f-name"]=f_name
+        bn_info["m-name"]=m_name
+        return bn_info
     
 
             
-    def __call__(self,img_path,face,rets,execs,debug=False):
+    def __call__(self,
+                 img_path,
+                 face,
+                 ret_bangla,
+                 exec_rot,
+                 coverage_thresh=30):
         # return containers
         data={}
         included={}
         executed=[]
-        # params
-        exec_rot,exec_viz=execs
-        ret_bangla,ret_photo,ret_sign=rets
-        
         # -----------------------start-----------------------
         img=cv2.imread(img_path)
         img=cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
+        src=np.copy(img)
     
         if face=="front":
             clss=['bname', 'ename', 'fname', 'mname', 'dob', 'nid']
         else:
             clss=['addr']
-        if debug:
-            plt.imshow(img)
-            plt.show()
         
-        # visibility place holder
-        if exec_viz:
-            viz_info=self.execite_visibility_check()
-            executed.append(viz_info)
-        
-        # orientation
-        if exec_rot:
-            img,rot_info=self.execite_rotation_fix(img)
-            executed.append(rot_info)
-        
-        
-        # check yolo
-        img,locs=self.loc(img,clss)
-        if img is not None:
-            if debug:
-                plt.imshow(img)
-                plt.show()
+        try:
+            # orientation
+            if exec_rot:
+                # mask
+                mask=self.det.detect(img,self.base,ret_mask=True)
+                img,rot_info=self.execute_rotation_fix(img,mask)
+                executed.append(rot_info)
+        except Exception as erot:
+            return "text-region-missing"
             
+        # check yolo
+        img,locs,founds=self.loc(img,clss)
+        if img is None:
+            if len(founds)==0:
+                return "no-fields"
+            else:
+                if not exec_rot:
+                    mask=self.det.detect(src,self.base,ret_mask=True)
+                coverage=self.get_coverage(src,mask)
+                if coverage > coverage_thresh:
+                    return "loc-error"
+                else:
+                    return f"coverage-error#{coverage}"
+        else:
             # text detection
             boxes,crops=self.det.detect(img,self.base)
+            
             if face=="front":
-                data["nid-basic-info"]=self.get_basic_info(boxes,locs,crops,debug)
+                # sorted box dictionary
+                box_dict=self.process_boxes(boxes,locs,["sign","front","back","addr"])
+                data["nid-basic-info"]=self.get_basic_info(box_dict,crops)
+            
                 if ret_bangla:
-                    included["bangla-info"]=self.get_bangla_info()
-                if ret_photo:
-                    included["photo"]=self.get_photo()
-                if ret_sign:
-                    included["signature"]=self.get_signature()
+                    included["bangla-info"]=self.get_bangla_info(box_dict,crops)
+            
             else:
                 data["nid-back-info"]=self.get_addr()
             # containers
@@ -226,7 +255,3 @@ class OCR(object):
             data["executed"]=executed
             return data 
 
-        else:
-            return None
-        
-        

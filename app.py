@@ -3,10 +3,10 @@
 @author:MD.Nazmuddoha Ansary
 """
 from __future__ import print_function
-from asyncio import FastChildWatcher
 import os
+import pathlib
+from datetime import datetime
 
-from scipy.misc import face
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 import cv2
 # Flask utils
@@ -19,7 +19,7 @@ from coreLib.ocr import OCR
 # Define a flask app
 app = Flask(__name__,static_folder="nidstatic")
 # initialize ocr
-ocr=OCR("weights/")
+ocr=OCR()
 
 
 
@@ -39,82 +39,28 @@ def handle_cardface(face):
         return "invalid" 
 
 def handle_includes(includes):
-    # default
-    provide_bangla=False
-    provide_photo=False
-    provide_sign=False
-           
     # none case default
     if includes is None:
-        ret=(provide_bangla,provide_photo,provide_sign) 
-        return ret 
+        return False 
     # single case
     elif "," not in includes:
         if includes=="bangla":
-            provide_bangla=True
-            ret=(provide_bangla,provide_photo,provide_sign) 
-            return ret
-        elif includes=="photo":
-            provide_photo=True
-            ret=(provide_bangla,provide_photo,provide_sign) 
-            return ret
-        elif includes=="signature":
-            provide_sign=True
-            ret=(provide_bangla,provide_photo,provide_sign) 
-            return ret
+            return True
         else:
             return "invalid"
-    # multicase
-    elif "," in includes:
-        opts=includes.split(",")
-        for opt in opts:
-            if opt not in ["bangla","photo","signature"]:
-                return "invalid"
-        if "bangla" in opts:
-            provide_bangla=True
-        if "photo" in opts:
-            provide_photo=True
-        if "signature" in opts:
-            provide_sign=True
-        ret=(provide_bangla,provide_photo,provide_sign) 
-        return ret
     else:
         return "invalid"
             
 def handle_execs(executes):
-    # default
-    exec_rot=False
-    exec_viz=False
     # none case default
     if executes is None:
-        execs=(exec_rot,exec_viz)
-        return execs 
+        return False 
     # single case
     elif "," not in executes:
         if executes=="rotation-fix":
-            exec_rot=True
-            exec_viz=False
-            execs=(exec_rot,exec_viz)
-            return execs
-        elif executes=="visibility-check":
-            exec_rot=False
-            exec_viz=True
-            execs=(exec_rot,exec_viz)
-            return execs
+            return True
         else:
             return "invalid"
-    # multicase   #visibility-check,rotation-fix
-    elif "," in executes:
-        opts=executes.split(",")
-        for opt in opts:
-            if opt not in ["visibility-check","rotation-fix"]:
-                return "invalid"
-        if "rotation-fix" in opts:
-            exec_rot=True
-        if "visibility-check" in opts:
-            exec_viz=True
-        execs=(exec_rot,exec_viz)
-        return execs
     else:
         return "invalid"
             
@@ -127,6 +73,14 @@ def consttruct_error(msg,etype,msg_code,details,suggestion=""):
     return exec_error
 
 
+def update_log(logs):
+    with open("logs.log","a+") as log:
+        log.write("..............................................\n")
+        for k in logs.keys():
+            log.write(f"{k}:\t{logs[k]}\n")
+        log.write("----------------------------------------------\n")
+        
+
 
 @app.route('/predictnid', methods=['GET', 'POST'])
 def upload():
@@ -134,61 +88,130 @@ def upload():
         try:
             # container
             logs={}
-            logs["execution-log"]={}
+            logs["req-time"] = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
             
-
             req_start=time()
             # handle card face
             face=handle_cardface(request.args.get("cardface"))
             if face =="invalid":
-                return jsonify({"error": consttruct_error("wrong cardface parameter","INVALID_PARAMETER","400","","use either front or back")}) 
+                logs["error"]=f'received cardface:{request.args.get("cardface")}'
+                update_log(logs)
+                return jsonify({"error": consttruct_error("wrong cardface parameter",
+                                                          "INVALID_PARAMETER",
+                                                          "400",
+                                                          f'received cardface:{request.args.get("cardface")}',
+                                                          "valid cardface:front,back")}) 
 
             # handle includes
-            rets=handle_includes(request.args.get("includes"))
-            if rets =="invalid":
-                return jsonify({"error":consttruct_error("wrong includes parameter","INVALID_PARAMETER","400","","use any or all of the valid includes: bangla,photo,signature")})
+            ret_bangla=handle_includes(request.args.get("includes"))
+            if ret_bangla =="invalid":
+                logs["error"]=f'received includes:{request.args.get("includes")}'
+                update_log(logs)
+                return jsonify({"error":consttruct_error("wrong includes parameter",
+                                                         "INVALID_PARAMETER",
+                                                         "400",
+                                                         f'received includes:{request.args.get("includes")}',
+                                                         "valid includes: bangla")})
 
             # handle executes
-            execs=handle_execs(request.args.get("executes"))
-            if execs =="invalid":
-                return jsonify({"error":consttruct_error("wrong executes parameter","INVALID_PARAMETER","400","","use any or all of the valid executes: visibility-check,rotation-fix") })
+            exec_rot=handle_execs(request.args.get("executes"))
+            if exec_rot=="invalid":
+                logs["error"]=f'received executes:{request.args.get("executes")}'
+                update_log(logs)
+                return jsonify({"error":consttruct_error("wrong executes parameter",
+                                                         "INVALID_PARAMETER",
+                                                         "400",
+                                                         f'received executes:{request.args.get("executes")}',
+                                                         "valid executes:rotation-fix") })
                 
             try:
                 # Get the file from post request
                 f = request.files['nidimage']
             except Exception as ef:
-                return jsonify({"error":consttruct_error("nidimage not received","INVALID_PARAMETER","400","","Please send image as form data")})
+                logs["error"]="nidimage not received"
+                update_log(logs)
+                return jsonify({"error":consttruct_error("nidimage not received",
+                                                         "INVALID_PARAMETER",
+                                                         "400",
+                                                         "",
+                                                         "Please send image as form data")})
                 
             save_start=time()
             # save file
             basepath = os.path.dirname(__file__)
             file_path = os.path.join(basepath,"tests",secure_filename(f.filename))
+            file_ext=pathlib.Path(file_path).suffix
+            if file_ext not in [".jpg",".png",".jpeg"]:
+                logs["error"]=f"received file-extension:{file_ext}"
+                update_log(logs)
+                return jsonify({"error":consttruct_error("image format not valid.",
+                                                         "INVALID_IMAGE","400",
+                                                         f"received file-extension:{file_ext}",
+                                                         "Please send .png image files")})
+            
             f.save(file_path)
-            logs["execution-log"]["file-save-time"]=round(time()-save_start,2)
+            logs["file-save-time"]=round(time()-save_start,2)
+            logs["file-name"]=secure_filename(f.filename)
+            logs["card-face"]=face
+            logs["params"]={"bangla":ret_bangla,"rotation-fix":exec_rot}
+            
             try:
                 img=cv2.imread(file_path)
             except Exception as er:
-                return jsonify({"error":consttruct_error("image format not valid.","INVALID_IMAGE","400","","Please send .jpg/.png/.jpeg image file")})
-            logs["execution-log"]["file-name"]=secure_filename(f.filename)
-            logs["execution-log"]["card=face"]=face
-            logs["execution-log"]["params"]={"bangla":rets[0],
-                                                "photo":rets[1],
-                                                "signature":rets[2],
-                                                "rotation-fix":execs[0],
-                                                "visibility-check":execs[1]}
+                logs["error"]="image not readable."
+                update_log(logs)
+                return jsonify({"error":consttruct_error("image not readable.",
+                                                         "INVALID_IMAGE",
+                                                         "400",
+                                                         "",
+                                                         "Please send uncorrupted image files")})
+            
                 
             
             proc_start=time()
-            ocr_out=ocr(file_path,face,rets,execs)
-            logs["execution-log"]["ocr-processing-time"]=round(time()-proc_start,2)
-            if ocr_out is None:
-                return jsonify({"error":consttruct_error("image is problematic","INVALID_IMAGE","400","","please try again with a clear nid image")})
+            ocr_out=ocr(file_path,face,ret_bangla,exec_rot)
+            logs["ocr-processing-time"]=round(time()-proc_start,2)
+            
+            if ocr_out =="loc-error":
+                logs["error"]="key fields cant be clearly located"
+                update_log(logs)
+                return jsonify({"error":consttruct_error("image is problematic",
+                                                         "INVALID_IMAGE","400",
+                                                         "key fields cant be clearly located",
+                                                         "please try again with a clear nid image")})
+            elif "coverage-error#" in ocr_out:
+                logs["error"]=f"Text region coverage:{ocr_out.replace('coverage-error#','')}, which is lower than 30%"
+                update_log(logs)
+                return jsonify({"error":consttruct_error("image is problematic",
+                                                         "INVALID_IMAGE","400",
+                                                         f"Text region coverage:{ocr_out.replace('coverage-error#','')}, which is lower than 30%",
+                                                         "please try again with a clear nid image")})
+
+            elif ocr_out=="text-region-missing":
+                logs["error"]="No text region found. Probably not an nid image."
+                update_log(logs)
+                return jsonify({"error":consttruct_error("image is problematic",
+                                                         "INVALID_IMAGE","400",
+                                                         "No text region found. Probably not an nid image.",
+                                                         "please try again with a clear nid image")})
+
+            elif ocr_out=="no-fields":
+                logs["error"]="No key-fields are detected."
+                update_log(logs)
+                return jsonify({"error":consttruct_error("image is problematic",
+                                                         "INVALID_IMAGE","400",
+                                                         "No key-fields are detected.",
+                                                         "please try again with a clear nid image")})
+
+            
+            
+            
+            
             data={}
             data["data"]=ocr_out
-            logs["execution-log"]["req-handling-time"]=round(time()-req_start,2)
-            # logs
-            #data["data"]["logs"]=logs 
-            pprint(logs)
+            logs["req-handling-time"]=round(time()-req_start,2)
+            
+            update_log(logs)
             return jsonify(data)
     
         except Exception as e:
@@ -201,8 +224,6 @@ def upload():
 def vizupload():
     if request.method == 'POST':
         try:
-            rets=(False,False,False)
-            execs=(True,False)
             face="front"
 
             try:
@@ -220,9 +241,18 @@ def vizupload():
             except Exception as er:
                 return jsonify(consttruct_error("image format not valid.","INVALID_IMAGE","400","","Please send .jpg/.png/.jpeg image file"))
             
-            data=ocr(file_path,face,rets,execs)
-            
-            return jsonify(data["nid-basic-info"])
+            data=ocr(file_path,face,exec_rot=True,ret_bangla=False)
+            res={}
+            for k in data["nid-basic-info"].keys():
+                res[k]=data["nid-basic-info"][k]
+
+            # for k in data["included"]["bangla-info"].keys():
+            #     res[k]=data["included"]["bangla-info"][k]
+
+            # for k in data["executed"][0].keys():
+            #     res[k]=data["executed"][0][k]
+
+            return jsonify(res)
     
         except Exception as e:
             return jsonify(consttruct_error("","INTERNAL_SERVER_ERROR","500","","please try again with a different image"))
