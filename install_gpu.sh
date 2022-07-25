@@ -1,5 +1,6 @@
 #!/bin/sh
-pip install paddlepaddle==2.3.0
+conda install -c conda-forge cudatoolkit=11.2 cudnn=8.2.4 -y
+conda install paddlepaddle-gpu==2.3.0 cudatoolkit=11.2 -c https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/Paddle/ -c conda-forge -y
 pip uninstall protobuf -y
 pip install --no-binary protobuf protobuf
 pip install opencv-python==4.6.0.66
@@ -12,7 +13,7 @@ pip install tqdm==4.64.0
 pip install attrdict==2.0.1
 pip install git+https://github.com/mnansary/PaddleOCR.git --verbose
 pip install torch==1.11.0 torchvision==0.12.0  --extra-index-url https://download.pytorch.org/whl/cpu
-pip install onnxruntime==1.11.1
+pip install onnxruntime-gpu==1.11
 pip install termcolor==1.1.0
 pip install gdown==4.5.1
 python weights/download.py
