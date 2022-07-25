@@ -15,6 +15,9 @@ pip install torch==1.11.0 torchvision==0.12.0  --extra-index-url https://downloa
 pip install onnxruntime-gpu==1.11
 pip install termcolor==1.1.0
 pip install gdown==4.5.1
-python weights/download.py
+cd weights/
+gdown 1gbCGRwZ6H0TO-ddd4IBPFqCmnEaWH-z7
+gdown 1YwpcDJmeO5mXlPDj1K0hkUobpwGaq3YA
+cd ..
 python setup_check.py
 echo succeeded
