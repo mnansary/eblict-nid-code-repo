@@ -1,6 +1,8 @@
 #!/bin/sh
-conda install -c anaconda cudatoolkit=11.4 cudnn=8.2.4 
+ conda install cudatoolkit=11.2 cudnn=8.2.1 -c conda-forge -c pytorch
 conda install paddlepaddle-gpu==2.3.0 cudatoolkit=11.2 -c https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/Paddle/ -c conda-forge 
+pip uninstall protobuf
+pip install --no-binary protobuf protobuf==3.18.0
 pip install opencv-python==4.6.0.66
 pip install shapely==1.8.2
 pip install pyclipper==1.3.0.post3
