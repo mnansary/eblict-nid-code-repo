@@ -19,6 +19,7 @@ import cv2
 import numpy as np
 import copy
 import pandas as pd
+import matplotlib.pyplot as plt
 #-------------------------
 # class
 #------------------------
@@ -48,20 +49,20 @@ class OCR(object):
         LOG_INFO("Loaded Paddle")
 
         
-    def process_boxes(self,text_boxes,region_dict,exclude_list):
+    def process_boxes(self,text_boxes,region_dict,includes):
         '''
             keeps relevant boxes with respect to region
             args:
                 text_boxes  :  detected text boxes by the detector
                 region_dict :  key,value pair dictionary of region_bbox and field info 
                                => {"field_name":[x_min,y_min,x_max,y_max]}
-                exclude_list:  list of fields to be excluded 
+                includes    :  list of fields to be included 
         '''
         # extract region boxes
         region_boxes=[]
         region_fields=[]
         for k,v in region_dict.items():
-            if k not in exclude_list:
+            if k in includes:
                 region_fields.append(k)
                 region_boxes.append(v)
         # ref_boxes
@@ -88,11 +89,63 @@ class OCR(object):
 
         return box_dict
 
-    def process_crop(self,locs,img,_key):
-        x1,y1,x2,y2=locs[_key]
-        crop=img[y1:y2,x1:x2]
-        return crop           
+    def create_line_ref_mask(self,image,boxes):
+        h,w,_=image.shape
+        mask=np.zeros((h,w))
+        for box in boxes:
+            box=[int(b) for b in box]
+            x1,y1,x2,y2=box
+            h=y2-y1
+            y2=y1+1+h//8
+            cv2.rectangle(mask,(x1,y1),(x2,y2),(255, 255, 255), -1)  
+        return mask
+
+    def create_line_refs(self,img,boxes,box_ids):
+        # boxes
+        word_orgs=[]
+        for bno in range(len(boxes)):
+            tmp_box = copy.deepcopy(boxes[bno])
+            x2,x1=int(max(tmp_box[:,0])),int(min(tmp_box[:,0]))
+            y2,y1=int(max(tmp_box[:,1])),int(min(tmp_box[:,1]))
+            word_orgs.append([x1,y1,x2,y2])
         
+        # references
+        line_refs=[]
+        mask=self.create_line_ref_mask(img,word_orgs)
+        # Create rectangular structuring element and dilate
+        mask=mask*255
+        mask=mask.astype("uint8")
+        h,w=mask.shape
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (w//2,1))
+        dilate = cv2.dilate(mask, kernel, iterations=4)
+
+        # Find contours and draw rectangle
+        cnts = cv2.findContours(dilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cnts = cnts[0] if len(cnts) == 2 else cnts[1]
+        for c in cnts:
+            x,y,w,h = cv2.boundingRect(c)
+            line_refs.append([x,y,x+w,y+h])
+        line_refs = sorted(line_refs, key=lambda x: (x[1], x[0]))
+        # sort boxed
+        data=pd.DataFrame({"ref_box":word_orgs,"ref_ids":box_ids})
+        # detect field
+        data["lines"]=data.ref_box.apply(lambda x:localize_box(x,line_refs))
+        data.dropna(inplace=True) 
+        data["lines"]=data.lines.apply(lambda x:int(x))
+        
+        text_dict=[]
+        for line in data.lines.unique():
+            ldf=data.loc[data.lines==line]
+            _boxes=ldf.ref_box.tolist()
+            _bids=ldf.ref_ids.tolist()
+            _,bids=zip(*sorted(zip(_boxes,_bids),key=lambda x: x[0][0]))
+            for idx,bid in enumerate(bids):
+                _dict={"line_no":line,"word_no":idx,"crop_id":bid}
+                text_dict.append(_dict)
+        df=pd.DataFrame(text_dict)
+        return df
+        
+
     #-------------------------------------------------------------------------------------------------------------------------
     # exectutives
     #-------------------------------------------------------------------------------------------------------------------------
@@ -115,14 +168,6 @@ class OCR(object):
 
         return image,rot_info
 
-
-    #---- place holders--------------------------------
-    def get_addr(self):
-        return {"address":"not-available-yet"}
-
-        
-    #---- place holders--------------------------------
-    
     #-------------------------------------------------------------------------------------------------------------------------
     # extractions
     #-------------------------------------------------------------------------------------------------------------------------
@@ -191,6 +236,23 @@ class OCR(object):
         bn_info["m-name"]=m_name
         return bn_info
     
+    def get_addr(self,crops,tdf):
+        cids=tdf.crop_id.tolist()
+        bn_crops=[crops[i] for i in cids]
+        texts=self.bnocr(bn_crops)
+        tdf["text"]=texts
+
+        # get text
+        line_max=max(tdf.line_no.tolist())
+        addr=""
+        for l in range(0,line_max+1):
+            ldf=tdf.loc[tdf.line_no==l]
+            ldf=ldf.sort_values('word_no')
+            ltext=" ".join(ldf.text.tolist())+"\n"
+            addr+=ltext
+
+        return {"address":addr}
+
 
             
     def __call__(self,
@@ -239,17 +301,27 @@ class OCR(object):
         else:
             # text detection
             boxes,crops=self.det.detect(img,self.base)
-            
+            # sorted box dictionary
+            box_dict=self.process_boxes(boxes,locs,clss)    
             if face=="front":
-                # sorted box dictionary
-                box_dict=self.process_boxes(boxes,locs,["sign","front","back","addr"])
                 data["nid-basic-info"]=self.get_basic_info(box_dict,crops)
             
                 if ret_bangla:
                     included["bangla-info"]=self.get_bangla_info(box_dict,crops)
             
             else:
-                data["nid-back-info"]=self.get_addr()
+                if 'addr' not in box_dict.keys():
+                    return "addr-not-located"
+                if len(box_dict["addr"])==0:
+                    return "addr-not-located"
+                # get address boxes
+                box_ids=box_dict["addr"]
+                addr_boxes=[boxes[int(i)] for i in box_ids]
+                # create box dataframe
+                tdf=self.create_line_refs(img,addr_boxes,box_ids)            
+                data["nid-back-info"]=self.get_addr(crops,tdf)
+                
+                
             # containers
             data["included"]=included
             data["executed"]=executed

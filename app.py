@@ -203,8 +203,13 @@ def upload():
                                                          "No key-fields are detected.",
                                                          "please try again with a clear nid image")})
 
-            
-            
+            elif ocr_out=="addr-not-located":
+                logs["error"]="address cant be located properly"
+                update_log(logs)
+                return jsonify({"error":consttruct_error("image is problematic",
+                                                         "INVALID_IMAGE","400",
+                                                         "address cant be located properly",
+                                                         "please try again with a clear nid image")})
             
             
             data={}

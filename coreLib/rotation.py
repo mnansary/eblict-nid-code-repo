@@ -57,7 +57,7 @@ def create_mask(image,regions):
             255
         )
     return mask
- 
+    
 def auto_correct_image_orientation(image,mask):
     h,w=mask.shape
     # extract contours
