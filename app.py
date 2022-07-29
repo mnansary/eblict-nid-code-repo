@@ -149,10 +149,10 @@ def upload():
                     logs["file-name"]=secure_filename(f.filename)
             
             
-                elif "base64nidimage" in request.form:
+                elif "nidimage" in request.form:
                     basepath = os.path.dirname(__file__)
                     file_path = os.path.join(basepath,"tests",f"upload_{time_stamp}.jpg")
-                    base64_img=request.form["base64nidimage"].replace(' ', '+').split(";base64,")[-1]
+                    base64_img=request.form["nidimage"].replace(' ', '+').split(";base64,")[-1]
                     convert_and_save(base64_img,file_path) 
                     logs["file-name"]=f"upload_{time_stamp}.jpg"
                 
