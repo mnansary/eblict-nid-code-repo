@@ -238,6 +238,16 @@ class YOLO(object):
             else:
                 founds.append(cls)
         return found,founds
+    
+    def align_boxes(self,locs):
+        if len(locs.keys())>2:
+            max_x1=max([locs[_key][0] for _key in locs.keys() if locs[_key] is not None and _key not in ["nid","dob"]])
+            for k in locs.keys():
+                if k not in ["nid","dob"] and locs[k] is not None:
+                    locs[k][0]=max_x1
+            return locs
+        else: 
+            return locs
 
     def __call__(self,img,clss,debug=False):
         '''
@@ -259,6 +269,7 @@ class YOLO(object):
             if _found:
                 img=np.copy(data)
                 found=True
+                locs=self.align_boxes(locs)
                 break
         
         if found:
