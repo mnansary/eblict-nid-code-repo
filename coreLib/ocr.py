@@ -3,6 +3,7 @@
 @author:MD.Nazmuddoha Ansary
 """
 from __future__ import print_function
+from distutils.log import debug
 
 #-------------------------
 # imports
@@ -12,7 +13,8 @@ from .utils import localize_box,LOG_INFO,download
 from .rotation import auto_correct_image_orientation
 from .paddet import Detector
 from .bnocr import BanglaOCR
-from .checks import processNID,processDob
+from .front import get_bangla_info,get_basic_info
+from .back import get_addr,reformat_back_data,get_regional_box_crops
 from paddleocr import PaddleOCR
 import os
 import cv2
@@ -45,6 +47,7 @@ class OCR(object):
         LOG_INFO("Loaded Bangla Model")        
         
         self.base=PaddleOCR(use_angle_cls=True, lang='en',rec_algorithm='SVTR_LCNet',use_gpu=True)
+        self.line=PaddleOCR(use_angle_cls=True, lang='hi',use_gpu=False)
         self.det=Detector()
         LOG_INFO("Loaded Paddle")
 
@@ -88,64 +91,6 @@ class OCR(object):
             box_dict[field]=idxs
 
         return box_dict
-
-    def create_line_ref_mask(self,image,boxes):
-        h,w,_=image.shape
-        mask=np.zeros((h,w))
-        for box in boxes:
-            box=[int(b) for b in box]
-            x1,y1,x2,y2=box
-            h=y2-y1
-            y2=y1+1+h//8
-            cv2.rectangle(mask,(x1,y1),(x2,y2),(255, 255, 255), -1)  
-        return mask
-
-    def create_line_refs(self,img,boxes,box_ids):
-        # boxes
-        word_orgs=[]
-        for bno in range(len(boxes)):
-            tmp_box = copy.deepcopy(boxes[bno])
-            x2,x1=int(max(tmp_box[:,0])),int(min(tmp_box[:,0]))
-            y2,y1=int(max(tmp_box[:,1])),int(min(tmp_box[:,1]))
-            word_orgs.append([x1,y1,x2,y2])
-        
-        # references
-        line_refs=[]
-        mask=self.create_line_ref_mask(img,word_orgs)
-        # Create rectangular structuring element and dilate
-        mask=mask*255
-        mask=mask.astype("uint8")
-        h,w=mask.shape
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (w//2,1))
-        dilate = cv2.dilate(mask, kernel, iterations=4)
-
-        # Find contours and draw rectangle
-        cnts = cv2.findContours(dilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        cnts = cnts[0] if len(cnts) == 2 else cnts[1]
-        for c in cnts:
-            x,y,w,h = cv2.boundingRect(c)
-            line_refs.append([x,y,x+w,y+h])
-        line_refs = sorted(line_refs, key=lambda x: (x[1], x[0]))
-        # sort boxed
-        data=pd.DataFrame({"ref_box":word_orgs,"ref_ids":box_ids})
-        # detect field
-        data["lines"]=data.ref_box.apply(lambda x:localize_box(x,line_refs))
-        data.dropna(inplace=True) 
-        data["lines"]=data.lines.apply(lambda x:int(x))
-        
-        text_dict=[]
-        for line in data.lines.unique():
-            ldf=data.loc[data.lines==line]
-            _boxes=ldf.ref_box.tolist()
-            _bids=ldf.ref_ids.tolist()
-            _,bids=zip(*sorted(zip(_boxes,_bids),key=lambda x: x[0][0]))
-            for idx,bid in enumerate(bids):
-                _dict={"line_no":line,"word_no":idx,"crop_id":bid}
-                text_dict.append(_dict)
-        df=pd.DataFrame(text_dict)
-        return df
-        
-
     #-------------------------------------------------------------------------------------------------------------------------
     # exectutives
     #-------------------------------------------------------------------------------------------------------------------------
@@ -168,99 +113,14 @@ class OCR(object):
 
         return image,rot_info
 
-    #-------------------------------------------------------------------------------------------------------------------------
-    # extractions
-    #-------------------------------------------------------------------------------------------------------------------------
-    def get_basic_info(self,box_dict,crops):
-        basic={}
-        # english ocr
-        eng_keys=["nid","dob","ename"]
-        ## en-name
-        en_name=box_dict[eng_keys[2]]
-        en_name_crops=[crops[i] for i in en_name]
-        ## dob
-        dob    = box_dict[eng_keys[1]]
-        dob_crops=[crops[i] for i in dob]
-        ## id
-        idx    = box_dict[eng_keys[0]]
-        idx_crops=[crops[i] for i in idx]
-        
-        en_crops=en_name_crops+dob_crops+idx_crops
-        res_eng = self.base.ocr(en_crops,det=False,cls=False)
-
-        ## text fitering
-        en_text=[i for i,_ in res_eng]# no conf
-        en_name=" ".join(en_text[:len(en_name_crops)])
-        en_text=en_text[len(en_name_crops):]
-        dob="".join(en_text[:len(dob_crops)])
-        en_text=en_text[len(dob_crops):]
-        idx="".join(en_text)
-
-        
-        basic["en-name"]=en_name
-        basic["nid"]=processNID(idx) 
-        basic["dob"]=processDob(dob) 
-
-        if basic["nid"] is None:
-            basic["nid"]="nid data not found. try agian with different image"
-                
-        if basic["dob"] is None:
-            basic["dob"]="dob data not found.try again with different image"
-        return basic 
-    
-    def get_bangla_info(self,box_dict,crops):
-        bn_info={}
-        # bangla ocr
-        bn_keys=["bname","fname","mname"]
-        ## b-name
-        b_name =box_dict[bn_keys[0]]
-        b_crops=[crops[i] for i in b_name]
-        ## f-name
-        f_name = box_dict[bn_keys[1]]
-        f_crops=[crops[i] for i in f_name]
-        ## m-name
-        m_name = box_dict[bn_keys[2]]
-        m_crops=[crops[i] for i in m_name]
-        
-        crops=b_crops+f_crops+m_crops
-        texts= self.bnocr(crops)
-
-        ## text fitering
-        b_name=" ".join(texts[:len(b_crops)])
-        texts=texts[len(b_crops):]
-        f_name=" ".join(texts[:len(f_crops)])
-        texts=texts[len(f_crops):]
-        m_name=" ".join(texts)
-        bn_info["bn-name"]=b_name
-        bn_info["f-name"]=f_name
-        bn_info["m-name"]=m_name
-        return bn_info
-    
-    def get_addr(self,crops,tdf):
-        cids=tdf.crop_id.tolist()
-        bn_crops=[crops[i] for i in cids]
-        texts=self.bnocr(bn_crops)
-        tdf["text"]=texts
-
-        # get text
-        line_max=max(tdf.line_no.tolist())
-        addr=""
-        for l in range(0,line_max+1):
-            ldf=tdf.loc[tdf.line_no==l]
-            ldf=ldf.sort_values('word_no')
-            ltext=" ".join(ldf.text.tolist())+"\n"
-            addr+=ltext
-
-        return {"address":addr}
-
-
             
     def __call__(self,
                  img_path,
                  face,
                  ret_bangla,
                  exec_rot,
-                 coverage_thresh=30):
+                 coverage_thresh=30,
+                 debug=False):
         # return containers
         data={}
         included={}
@@ -273,53 +133,56 @@ class OCR(object):
         if face=="front":
             clss=['bname', 'ename', 'fname', 'mname', 'dob', 'nid']
         else:
-            clss=['addr']
+            clss=['addr','back']
         
         try:
             # orientation
             if exec_rot:
                 # mask
-                mask=self.det.detect(img,self.base,ret_mask=True)
+                mask,_,_=self.det.detect(img,self.base)
                 img,rot_info=self.execute_rotation_fix(img,mask)
                 executed.append(rot_info)
         except Exception as erot:
             return "text-region-missing"
             
         # check yolo
-        img,locs,founds=self.loc(img,clss)
+        img,locs,founds=self.loc(img,clss,face)
+
         if img is None:
             if len(founds)==0:
                 return "no-fields"
             else:
                 if not exec_rot:
-                    mask=self.det.detect(src,self.base,ret_mask=True)
+                    mask,_,_=self.det.detect(src,self.base)
                 coverage=self.get_coverage(src,mask)
                 if coverage > coverage_thresh:
                     return "loc-error"
                 else:
                     return f"coverage-error#{coverage}"
         else:
-            # text detection
-            boxes,crops=self.det.detect(img,self.base)
-            # sorted box dictionary
-            box_dict=self.process_boxes(boxes,locs,clss)    
             if face=="front":
-                data["nid-basic-info"]=self.get_basic_info(box_dict,crops)
-            
+                # text detection [word-based]
+                _,boxes,crops=self.det.detect(img,self.base)
+                # sorted box dictionary [clss based box_dict]
+                box_dict=self.process_boxes(boxes,locs,clss)        
+                data["nid-basic-info"]=get_basic_info(box_dict,crops,self.base)
                 if ret_bangla:
-                    included["bangla-info"]=self.get_bangla_info(box_dict,crops)
+                    included["bangla-info"]=get_bangla_info(box_dict,crops,self.bnocr)
             
             else:
-                if 'addr' not in box_dict.keys():
-                    return "addr-not-located"
-                if len(box_dict["addr"])==0:
-                    return "addr-not-located"
-                # get address boxes
-                box_ids=box_dict["addr"]
-                addr_boxes=[boxes[int(i)] for i in box_ids]
-                # create box dataframe
-                tdf=self.create_line_refs(img,addr_boxes,box_ids)            
-                data["nid-back-info"]=self.get_addr(crops,tdf)
+                # crop image if both front and back is present
+                if locs['dob'] is not None and locs["nid"] is not None:
+                    img,locs=reformat_back_data(img,locs)
+                # text detection 
+                line_mask,line_boxes,_=self.det.detect(img,self.line)
+                word_mask,word_boxes,word_crops=self.det.detect(img,self.base)
+                # regional text
+                line_boxes,word_boxes,crops=get_regional_box_crops(line_mask,line_boxes,word_mask,word_boxes,word_crops)
+                texts=self.bnocr(crops)
+                # get address
+                df=get_addr(word_boxes,line_boxes,texts)
+                return df
+                #data["nid-back-info"]=get_addr(word_boxes,line_boxes,texts)
                 
                 
             # containers

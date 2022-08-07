@@ -179,6 +179,10 @@ class YOLO(object):
             y1=int(h*(y1/self.img_dim[0]))
             x2=int(w*(x2/self.img_dim[1]))
             y2=int(h*(y2/self.img_dim[0]))
+            if x1<0:x1=0
+            if y1<0:y1=0
+            if x2>w:x2=w
+            if y2>h:y2=h 
             box=[x1,y1,x2,y2]
             res[self.labels[int(cidx)]]=box
         
@@ -239,8 +243,8 @@ class YOLO(object):
                 founds.append(cls)
         return found,founds
     
-    def align_boxes(self,locs):
-        if len(locs.keys())>2:
+    def align_boxes(self,locs,face):
+        if face=="front":
             max_x1=max([locs[_key][0] for _key in locs.keys() if locs[_key] is not None and _key not in ["nid","dob"]])
             for k in locs.keys():
                 if k not in ["nid","dob"] and locs[k] is not None:
@@ -249,7 +253,7 @@ class YOLO(object):
         else: 
             return locs
 
-    def __call__(self,img,clss,debug=False):
+    def __call__(self,img,clss,face,debug=False):
         '''
             args:
                 img : the image to process
@@ -269,7 +273,7 @@ class YOLO(object):
             if _found:
                 img=np.copy(data)
                 found=True
-                locs=self.align_boxes(locs)
+                locs=self.align_boxes(locs,face)
                 break
         
         if found:

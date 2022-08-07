@@ -71,25 +71,19 @@ class Detector(object):
         return dst_img
         
     
-    def detect(self,img,model,ret_mask=False):
+    def detect(self,img,model):
         '''
             extract locations and crops
         '''
         result= model.ocr(img,rec=False)
-        
-        if ret_mask:
-            mask=create_mask(img,result)
-            return mask
-        
-        else:     
-            boxes= np.array(result, dtype=np.float32)
-            boxes=self.sorted_boxes(boxes)
-            crops=[]
-            for bno in range(len(boxes)):
-                tmp_box = copy.deepcopy(boxes[bno])
-                img_crop = self.get_rotate_crop_image(img,tmp_box)
-                crops.append(img_crop)
-
-            return boxes,crops
+        boxes= np.array(result, dtype=np.float32)
+        boxes=self.sorted_boxes(boxes)
+        crops=[]
+        for bno in range(len(boxes)):
+            tmp_box = copy.deepcopy(boxes[bno])
+            img_crop = self.get_rotate_crop_image(img,tmp_box)
+            crops.append(img_crop)
+        mask=create_mask(img,boxes)
+        return mask,boxes,crops
 
     

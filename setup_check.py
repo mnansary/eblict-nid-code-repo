@@ -10,5 +10,5 @@ from coreLib.ocr import OCR
 from pprint import pprint
 ocr=OCR()
 img_path="tests/test.jpg"
-data=ocr(img_path,"back",True,True)
+data=ocr(img_path,"front",True,True)
 pprint(data)

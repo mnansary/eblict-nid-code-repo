@@ -54,7 +54,7 @@ def create_mask(image,regions):
         cv2.fillPoly(
             mask,
             [region.reshape((-1, 1, 2))],
-            255
+            i+1
         )
     return mask
     
