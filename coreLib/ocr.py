@@ -47,7 +47,7 @@ class OCR(object):
         LOG_INFO("Loaded Bangla Model")        
         
         self.base=PaddleOCR(use_angle_cls=True, lang='en',rec_algorithm='SVTR_LCNet',use_gpu=True)
-        self.line=PaddleOCR(use_angle_cls=True, lang='hi',use_gpu=False)
+        self.line=PaddleOCR(use_angle_cls=True, lang='hi',use_gpu=True)
         self.det=Detector()
         LOG_INFO("Loaded Paddle")
 
