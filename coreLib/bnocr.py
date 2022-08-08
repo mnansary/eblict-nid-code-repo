@@ -9,6 +9,8 @@ from __future__ import print_function
 import onnxruntime as ort
 import numpy as np
 import cv2 
+from bnunicodenormalizer import Normalizer
+NORM=Normalizer()
 #-------------------------
 # helpers
 #------------------------
@@ -153,4 +155,6 @@ class BanglaOCR(object):
                     else:
                         break
                 texts.append(label)
+        texts=[NORM(text)["normalized"] for text in texts]
+        texts=[text for text in texts if text is not None]
         return texts

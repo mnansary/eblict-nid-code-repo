@@ -15,6 +15,7 @@ pip install torch==1.11.0 torchvision==0.12.0  --extra-index-url https://downloa
 pip install onnxruntime==1.11.1
 pip install termcolor==1.1.0
 pip install gdown==4.5.1
+pip install bnunicodenormalizer
 python weights/download.py
 python setup_check.py
 echo succeeded

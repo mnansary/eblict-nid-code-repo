@@ -15,6 +15,7 @@ pip install torch==1.11.0 torchvision==0.12.0  --extra-index-url https://downloa
 pip install onnxruntime-gpu==1.11
 pip install termcolor==1.1.0
 pip install gdown==4.5.1
+pip install bnunicodenormalizer
 sudo chmod -R 777 weights/
 sudo chmod -R 777 tests/
 sudo touch logs.log

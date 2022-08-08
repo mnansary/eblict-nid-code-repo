@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 import copy
 from .utils import localize_box
-
+from Levenshtein import distance as lev
 
 def reformat_back_data(img,locs):
     x1a,y1a,x2a,y2a=locs["addr"]
@@ -36,13 +36,14 @@ def get_regional_box_crops(line_mask,line_boxes,word_mask,word_boxes,word_crops)
         reg_row = np.where(np. all((word_reg_mask == 0), axis=1)==True)[0].min()
         line_reg_mask=line_reg_mask[:reg_row,:]
         word_reg_mask=word_reg_mask[:reg_row,:]
-        
+        card_type="smart"
         
     else:
         # old nid card
         h,w=word_reg_mask.shape
         line_reg_mask=line_reg_mask[:h//2,:]
         word_reg_mask=word_reg_mask[:h//2,:]
+        card_type="old"
     # create line ids
     line_ids=np.unique(line_reg_mask)[1:]
     # create word ids
@@ -50,6 +51,9 @@ def get_regional_box_crops(line_mask,line_boxes,word_mask,word_boxes,word_crops)
     line_boxes=[line_boxes[int(i)-1] for i in line_ids]
     word_boxes=[word_boxes[int(i)-1] for i in word_ids]
     word_crops=[word_crops[int(i)-1] for i in word_ids]
+    if card_type=="old":
+        word_crops=word_crops[22:]
+        word_boxes=word_boxes[22:]
 
     return line_boxes,word_boxes,word_crops
 
@@ -101,9 +105,15 @@ def get_addr(word_boxes,line_boxes,texts):
         ldf=df.loc[df.line_no==l]
         ldf=ldf.sort_values('word_no')
         words+=ldf.text.tolist()
-    return " ".join(words)
-
-    #return {"address":addr}
+    # search for keywords:
+    keywords=["ডাকঘর:",'বাসা/হোল্ডিং:','গ্রাম/রাস্তা:',"ঠিকানা:"]
+    for text in keywords:
+        dists=[lev(text,word) for word in words]
+        words[dists.index(min(dists))]=text 
+    # replace address
+    addr= " ".join(words)
+    addr=addr.replace("ঠিকানা:",'')
+    return {"address":addr}
 
 
 
