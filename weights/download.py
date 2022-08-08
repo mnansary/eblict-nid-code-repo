@@ -27,3 +27,4 @@ if __name__=="__main__":
         download(bnocr_gid,bnocr_onnx)
     
     base=PaddleOCR(use_angle_cls=True, lang='en',rec_algorithm='SVTR_LCNet',use_gpu=True)
+    line=PaddleOCR(use_angle_cls=True, lang='hi',use_gpu=True)
