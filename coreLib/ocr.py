@@ -180,9 +180,7 @@ class OCR(object):
                 line_boxes,word_boxes,crops=get_regional_box_crops(line_mask,line_boxes,word_mask,word_boxes,word_crops)
                 texts=self.bnocr(crops)
                 # get address
-                df=get_addr(word_boxes,line_boxes,texts)
-                return df
-                #data["nid-back-info"]=get_addr(word_boxes,line_boxes,texts)
+                data["nid-back-info"]=get_addr(word_boxes,line_boxes,texts)
                 
                 
             # containers
