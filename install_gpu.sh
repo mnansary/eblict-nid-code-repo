@@ -1,5 +1,6 @@
 #!/bin/sh
-conda install paddlepaddle-gpu==2.3.0 cudatoolkit=11.2 -c https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/Paddle/ -c conda-forge 
+conda install cudatoolkit 
+python -m pip install paddlepaddle-gpu==2.3.0.post111 -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
 pip uninstall protobuf
 pip install --no-binary protobuf protobuf==3.18.0
 pip install opencv-python==4.6.0.66
