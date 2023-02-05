@@ -1,7 +1,9 @@
 #!/bin/sh
 conda install cudatoolkit 
 conda install cudnn
-python -m pip install paddlepaddle-gpu==2.3.0.post111 -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
+#python -m pip install paddlepaddle-gpu==2.3.0.post111 -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
+wget https://paddle-wheel.bj.bcebos.com/2.3.0/linux/linux-gpu-cuda11.1-cudnn8.1-mkl-gcc8.2-avx/paddlepaddle_gpu-2.3.0.post111-cp38-cp38-linux_x86_64.whl
+pip install paddlepaddle_gpu-2.3.0.post111-cp38-cp38-linux_x86_64.whl
 pip uninstall protobuf
 pip install --no-binary protobuf protobuf==3.18.0
 pip install opencv-python==4.6.0.66
