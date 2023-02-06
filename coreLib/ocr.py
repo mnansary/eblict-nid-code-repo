@@ -143,6 +143,9 @@ class OCR(object):
                 img,rot_info=self.execute_rotation_fix(img,mask)
                 executed.append(rot_info)
         except Exception as erot:
+            print("--------------------------error----------------------------------------------------")
+            print(erot)
+            print("--------------------------error----------------------------------------------------")
             return "text-region-missing"
             
         # check yolo

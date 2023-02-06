@@ -157,6 +157,9 @@ def upload():
                     logs["file-name"]=f"upload_{time_stamp}.jpg"
                 
             except Exception as ef:
+                print("--------------------------error----------------------------------------------------")
+                print(ef)
+                print("--------------------------error----------------------------------------------------")               
                 logs["error"]="nidimage not received"
                 update_log(logs)
                 return jsonify({"error":consttruct_error("nidimage not received",
@@ -174,6 +177,9 @@ def upload():
             try:
                 img=cv2.imread(file_path)
             except Exception as er:
+                print("--------------------------error----------------------------------------------------")
+                print(er)
+                print("--------------------------error----------------------------------------------------")
                 logs["error"]="image not readable."
                 update_log(logs)
                 return jsonify({"error":consttruct_error("image not readable.",
@@ -236,6 +242,10 @@ def upload():
             return jsonify(data)
     
         except Exception as e:
+            print("--------------------------error----------------------------------------------------")
+            print(e)
+            print("--------------------------error----------------------------------------------------")
+            
             return jsonify({"error":consttruct_error("","INTERNAL_SERVER_ERROR","500","","please try again with a different image")})
     
     return jsonify({"error":consttruct_error("","INTERNAL_SERVER_ERROR","500","","please try again with a different image")})
