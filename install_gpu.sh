@@ -1,7 +1,6 @@
 #!/bin/sh
-conda install cudatoolkit 
-conda install cudnn
-#python -m pip install paddlepaddle-gpu==2.3.0.post111 -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
+conda install cudatoolkit=11.3.1 
+conda install cudnn=8.2.1
 wget https://paddle-wheel.bj.bcebos.com/2.3.0/linux/linux-gpu-cuda11.1-cudnn8.1-mkl-gcc8.2-avx/paddlepaddle_gpu-2.3.0.post111-cp38-cp38-linux_x86_64.whl
 pip install paddlepaddle_gpu-2.3.0.post111-cp38-cp38-linux_x86_64.whl
 pip uninstall protobuf
@@ -20,6 +19,8 @@ pip install onnxruntime-gpu==1.11
 pip install termcolor==1.1.0
 pip install gdown==4.5.1
 pip install bnunicodenormalizer
+pip uninstall numpy
+pip install numpy==1.23.1
 sudo chmod -R 777 weights/
 sudo chmod -R 777 tests/
 sudo touch logs.log
