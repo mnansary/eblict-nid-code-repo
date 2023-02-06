@@ -17,7 +17,7 @@ pip install git+https://github.com/mnansary/PaddleOCR.git --verbose
 pip install torch==1.11.0 torchvision==0.12.0  --extra-index-url https://download.pytorch.org/whl/cpu
 pip install onnxruntime-gpu==1.11
 pip install termcolor==1.1.0
-pip install gdown==4.5.1
+pip install gdown
 pip install bnunicodenormalizer
 pip uninstall numpy
 pip install numpy==1.23.1
