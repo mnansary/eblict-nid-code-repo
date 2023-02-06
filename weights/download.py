@@ -12,10 +12,9 @@ import gdown
 from paddleocr import PaddleOCR
 
 yolo_onnx="weights/yolo.onnx"
-yolo_gid="1gbCGRwZ6H0TO-ddd4IBPFqCmnEaWH-z7"
+yolo_gid="1U_JHoRD9w2QqNPzRo2vMdlx_7dTpRmhq"
 bnocr_onnx="weights/bnocr.onnx"
-bnocr_gid="1YwpcDJmeO5mXlPDj1K0hkUobpwGaq3YA"
-
+bnocr_gid="1T0bSSteofbyqsmBH9CuFrFtlOhws2g--"
 def download(id,save_dir):
     gdown.download(id=id,output=save_dir,quiet=False)
 
