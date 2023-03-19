@@ -52,10 +52,3 @@ Processor   : Intel® Core™ i9-10900K CPU @ 3.70GHz × 20
 Graphics    : NVIDIA GeForce RTX 3090/PCIe/SSE2
 Gnome       : 3.36.8
 ```
-
-<!-- **STACK EXECUTION**
-
-| **OP** | **avg-rough-Exec** | **Support** |
-|  :----: |  :----:  |  :----:  |
-| ocr initialization/loading | 6.5s-8.5s |5 iters |
-| ocr execution | 4.5s-6.5s |5 iters | -->
